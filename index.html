@@ -124,6 +124,8 @@
 
   .combo-add{display:flex;gap:6px;}
   .combo-add select{flex:1;}
+  .search-inline{display:flex;gap:6px;}
+  .search-inline input{flex:1;}
   .combo-add-btn{
     flex-shrink:0;width:44px;height:44px;border-radius:8px;border:1px solid var(--blue-100);
     background:var(--blue-50);color:var(--blue-600);font-size:20px;font-weight:600;cursor:pointer;
@@ -255,7 +257,8 @@ async function inicializarCombos(escopo) {
 async function popularCombo(container, manterSelecionado) {
   const categoria = container.dataset.categoria;
   const select = container.querySelector('select');
-  const atual = manterSelecionado || select.value;
+  if (!select) return; // container sem select (ex.: campo de busca) — nada a fazer
+  const atual = typeof manterSelecionado === 'string' ? manterSelecionado : select.value;
   const opcoes = await apiGet('listarOpcoes', { categoria });
   select.innerHTML = opcoes.length
     ? opcoes.map(o => `<option value="${o}">${o}</option>`).join('')
@@ -414,7 +417,7 @@ async function renderProcessos(main) {
       <h3>Novo processo</h3>
       <form id="formProcesso" class="grid">
         <div><label>Nº do Processo</label>
-          <div class="combo-add">
+          <div class="search-inline">
             <input name="Numero_Processo" required placeholder="0001234-56.2026.8.24.0005">
             <button type="button" class="combo-add-btn" title="Buscar no Datajud" onclick="buscarDatajud(this)">⌕</button>
           </div>
