@@ -122,6 +122,25 @@
   .subpanel{display:none;}
   .subpanel.active{display:block;}
 
+  .spinner{
+    display:inline-block;width:14px;height:14px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+    animation:girar .7s linear infinite;vertical-align:-2px;margin-right:7px;
+  }
+  @keyframes girar{to{transform:rotate(360deg);}}
+
+  .consulta-loading{
+    display:flex;align-items:center;gap:12px;padding:18px 20px;
+    border:1px solid var(--blue-100);border-radius:10px;background:var(--blue-50);
+  }
+  .consulta-loading .spinner-azul{
+    width:20px;height:20px;border-radius:50%;flex-shrink:0;
+    border:3px solid var(--blue-100);border-top-color:var(--blue-600);
+    animation:girar .7s linear infinite;
+  }
+  .consulta-loading .texto{font-size:13px;color:var(--blue-800);font-weight:500;}
+  .consulta-loading .tempo{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--slate-500);margin-top:2px;}
+
   .combo-add{display:flex;gap:6px;}
   .combo-add select{flex:1;}
   .search-inline{display:flex;gap:6px;}
@@ -283,6 +302,8 @@ async function adicionarItemCombo(container) {
    Consulta ao Datajud (CNJ) — preenche Vara/Tipo de Ação
    automaticamente a partir do número do processo.
    ========================================================= */
+let ultimoResultadoDatajud = null;
+
 async function buscarDatajud(btn) {
   const form = document.getElementById('formProcesso');
   const numero = form.querySelector('[name="Numero_Processo"]').value.trim();
@@ -290,50 +311,111 @@ async function buscarDatajud(btn) {
   if (!numero) { toast('Digite o número do processo primeiro.', true); return; }
 
   if (btn.dataset.busy === '1') return;
-  btn.dataset.busy = '1'; btn.disabled = true; const textoOriginal = btn.textContent; btn.textContent = '…';
+  btn.dataset.busy = '1'; btn.disabled = true;
+  const iconeOriginal = btn.textContent;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  // Painel com cronômetro ao vivo, pra mostrar quanto tempo a consulta está levando
+  const inicio = performance.now();
+  box.innerHTML = `
+    <div class="consulta-loading">
+      <div class="spinner-azul"></div>
+      <div>
+        <div class="texto">Consultando o Datajud (CNJ)…</div>
+        <div class="tempo" id="cronometroDatajud">0,0s</div>
+      </div>
+    </div>`;
+  const cronometroEl = document.getElementById('cronometroDatajud');
+  const intervalo = setInterval(() => {
+    if (cronometroEl) cronometroEl.textContent = ((performance.now() - inicio) / 1000).toFixed(1) + 's';
+  }, 100);
 
   try {
     const r = await apiGet('consultarDatajud', { numeroProcesso: numero });
-    if (!r.encontrado) {
-      box.innerHTML = `<div class="empty">Processo não localizado no Datajud (${r.tribunal || '—'}). Preencha manualmente.</div>`;
-      return;
-    }
+    ultimoResultadoDatajud = r;
+    const tempoTotal = ((performance.now() - inicio) / 1000).toFixed(1);
 
-    // Preenche Vara/Juízo (combo) — adiciona a opção se ainda não existir
-    const comboVara = form.querySelector('[data-categoria="Vara_Juizo"]');
-    if (comboVara && r.orgaoJulgador) {
-      const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Vara_Juizo', Valor: r.orgaoJulgador });
-      await popularCombo(comboVara, valorSalvo);
-    }
-    // Preenche Tipo de Ação (combo)
-    const comboTipo = form.querySelector('[data-categoria="Tipo_Acao"]');
-    if (comboTipo && r.classe) {
-      const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Tipo_Acao', Valor: r.classe });
-      await popularCombo(comboTipo, valorSalvo);
-    }
-    // Data de distribuição (campo oculto, sem edição manual)
-    if (r.dataAjuizamento) {
-      const campoData = form.querySelector('[name="Data_Distribuicao"]');
-      if (campoData) campoData.value = r.dataAjuizamento.slice(0, 10);
+    if (!r.encontrado) {
+      box.innerHTML = `<div class="empty">Processo não localizado no Datajud (${r.tribunal || '—'}) — consulta levou ${tempoTotal}s. Preencha manualmente.</div>`;
+      return;
     }
 
     const movimentosHtml = (r.movimentosRecentes || []).map(m =>
       `<li>${m.data ? m.data.slice(0, 10) : '—'} — ${m.nome}</li>`
     ).join('');
 
+    const triagem = r.triagemPericia || { provavel: false, motivo: '' };
+    const avisoTriagem = triagem.provavel
+      ? `<p style="font-size:12px;color:var(--green);margin-top:8px;">✓ Provável perícia avaliatória — ${triagem.motivo}</p>`
+      : `<p style="font-size:12px;color:var(--amber);margin-top:8px;">⚠ Não identifiquei sinais claros de perícia avaliatória neste processo — ${triagem.motivo} Confira o objeto da ação antes de prosseguir.</p>`;
+
     box.innerHTML = `
       <div class="card" style="background:var(--blue-50);">
-        <h3>Encontrado no Datajud — ${r.tribunal}</h3>
+        <h3>Encontrado no Datajud — ${r.tribunal}
+          <span style="float:right;font-weight:400;font-size:11px;color:var(--slate-500);font-family:'JetBrains Mono',monospace;">consultado em ${tempoTotal}s</span>
+        </h3>
         <p style="font-size:12.5px;color:var(--slate-500);margin-bottom:8px;">
           ${r.classe || '—'} · ${r.orgaoJulgador || '—'} · ajuizado em ${r.dataAjuizamento ? r.dataAjuizamento.slice(0,10) : '—'}
         </p>
         ${movimentosHtml ? `<ul style="font-size:12px;color:var(--slate-500);padding-left:18px;margin:0;">${movimentosHtml}</ul>` : ''}
+        ${avisoTriagem}
+        <div class="row-actions" style="margin-top:14px;">
+          <button type="button" class="primary" onclick="aplicarDadosDatajud(this)">Usar estes dados no processo</button>
+        </div>
       </div>`;
-    toast('Dados importados do Datajud — revise antes de salvar.');
+    toast(`Processo localizado em ${tempoTotal}s — revise e clique em "Usar estes dados".`);
   } catch (err) {
     box.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
   } finally {
-    btn.disabled = false; btn.textContent = textoOriginal; btn.dataset.busy = '0';
+    clearInterval(intervalo);
+    btn.disabled = false; btn.textContent = iconeOriginal; btn.dataset.busy = '0';
+  }
+}
+
+/** Extrai o nome da comarca de um texto tipo "2ª Vara Cível da Comarca de Balneário Camboriú". */
+function extrairComarca_(orgaoJulgador) {
+  if (!orgaoJulgador) return null;
+  const m = orgaoJulgador.match(/comarca de (.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
+/** Preenche de fato os campos do formulário com o último resultado do Datajud, mediante confirmação do perito. */
+async function aplicarDadosDatajud(btn) {
+  const r = ultimoResultadoDatajud;
+  if (!r || !r.encontrado) return;
+  const form = document.getElementById('formProcesso');
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Preenchendo…'; }
+  try {
+    // Vara/Juízo
+    const comboVara = form.querySelector('[data-categoria="Vara_Juizo"]');
+    if (comboVara && r.orgaoJulgador) {
+      const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Vara_Juizo', Valor: r.orgaoJulgador });
+      await popularCombo(comboVara, valorSalvo);
+    }
+    // Tipo de Ação
+    const comboTipo = form.querySelector('[data-categoria="Tipo_Acao"]');
+    if (comboTipo && r.classe) {
+      const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Tipo_Acao', Valor: r.classe });
+      await popularCombo(comboTipo, valorSalvo);
+    }
+    // Comarca (extraída do nome do órgão julgador, quando possível)
+    const comarcaDetectada = extrairComarca_(r.orgaoJulgador);
+    const comboComarca = form.querySelector('[data-categoria="Comarca"]');
+    if (comboComarca && comarcaDetectada) {
+      const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Comarca', Valor: comarcaDetectada });
+      await popularCombo(comboComarca, valorSalvo);
+    }
+    // Data de distribuição (campo oculto)
+    if (r.dataAjuizamento) {
+      const campoData = form.querySelector('[name="Data_Distribuicao"]');
+      if (campoData) campoData.value = r.dataAjuizamento.slice(0, 10);
+    }
+    toast('Campos preenchidos com os dados do Datajud.');
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Usar estes dados no processo'; }
   }
 }
 
