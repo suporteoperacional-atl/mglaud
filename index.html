@@ -85,9 +85,15 @@
   input,select,textarea{
     width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;
     font-family:'Inter',sans-serif;font-size:16px;background:var(--white);color:var(--slate-900);
-    min-height:44px;
+    min-height:44px;line-height:1.3;
   }
   textarea{min-height:0;}
+  select{
+    -webkit-appearance:none;-moz-appearance:none;appearance:none;
+    padding-right:34px;cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748B'><path d='M5.5 7.5l4.5 4.5 4.5-4.5z'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center;background-size:16px;
+  }
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue-600);box-shadow:0 0 0 3px var(--blue-100);}
 
   button.primary{
@@ -712,14 +718,21 @@ async function renderVistoria(main) {
       <div class="subpanel" data-subtab="identificacao">
         <div class="card"><h3>Identificação e localização</h3>
           <div class="grid">
-            <div style="grid-column:1/-1;"><label>Endereço completo</label><input name="Endereco_Completo" required></div>
+            <div><label>CEP</label>
+              <div class="search-inline">
+                <input name="CEP" id="inputCep" placeholder="00000-000" inputmode="numeric">
+                <button type="button" class="combo-add-btn" title="Buscar endereço pelo CEP" onclick="buscarCep(this)">⌕</button>
+              </div>
+              <p style="font-size:11px;color:var(--slate-500);margin-top:4px;">Preenche Endereço, Bairro e Cidade/UF automaticamente.</p>
+            </div>
+            <div style="grid-column:span 2;"><label>Endereço completo</label><input name="Endereco_Completo" id="inputEndereco" required></div>
             <div><label>Bairro</label>
               <div class="combo-add" data-categoria="Bairro">
                 <select name="Bairro"></select>
                 <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
               </div>
             </div>
-            <div><label>Cidade/UF</label><input name="Cidade_UF"></div>
+            <div><label>Cidade/UF</label><input name="Cidade_UF" id="inputCidadeUf"></div>
             <div><label>Matrícula</label><input name="Matricula_Registro"></div>
             <div><label>Nº IPTU</label><input name="Numero_IPTU"></div>
           </div>
@@ -768,6 +781,53 @@ async function renderVistoria(main) {
   `;
   document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === state.subtab));
   await inicializarCombos(document.getElementById('formVistoria'));
+  aplicarMascaraCep(document.getElementById('inputCep'));
+}
+
+/** Máscara simples de CEP: 00000-000. */
+function aplicarMascaraCep(input) {
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const digitos = input.value.replace(/\D/g, '').slice(0, 8);
+    input.value = digitos.length > 5 ? digitos.slice(0, 5) + '-' + digitos.slice(5) : digitos;
+  });
+}
+
+/** Busca o endereço pelo CEP na ViaCEP (gratuita, direto do navegador — sem passar pelo Apps Script). */
+async function buscarCep(btn) {
+  const input = document.getElementById('inputCep');
+  const cep = input.value.replace(/\D/g, '');
+  if (cep.length !== 8) { toast('Digite um CEP completo (8 dígitos).', true); return; }
+
+  const iconeOriginal = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-blue"></span>';
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const dados = await res.json();
+    if (dados.erro) { toast('CEP não encontrado.', true); return; }
+
+    const inputEndereco = document.getElementById('inputEndereco');
+    if (inputEndereco) {
+      inputEndereco.value = [dados.logradouro, dados.complemento].filter(Boolean).join(', ');
+    }
+    const inputCidadeUf = document.getElementById('inputCidadeUf');
+    if (inputCidadeUf && dados.localidade && dados.uf) {
+      inputCidadeUf.value = `${dados.localidade}/${dados.uf}`;
+    }
+    if (dados.bairro) {
+      const comboBairro = document.querySelector('#formVistoria [data-categoria="Bairro"]');
+      if (comboBairro) {
+        const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Bairro', Valor: dados.bairro });
+        registrarOpcaoNoCache('Bairro', valorSalvo);
+        await popularCombo(comboBairro, valorSalvo);
+      }
+    }
+    toast('Endereço preenchido pelo CEP — confira o número e complemento.');
+  } catch (err) {
+    toast('Não foi possível consultar o CEP agora.', true);
+  } finally {
+    btn.disabled = false; btn.innerHTML = iconeOriginal;
+  }
 }
 
 async function salvarVistoria(btn) {
