@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MGlaud — Vistorias Periciais</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --white:#FFFFFF;
+    --blue-950:#0A2A5E;
+    --blue-800:#123B85;
+    --blue-600:#2E6FED;
+    --blue-400:#7FA8F5;
+    --blue-100:#EAF1FE;
+    --blue-50:#F5F9FF;
+    --slate-900:#16233B;
+    --slate-500:#64748B;
+    --line:#E1E9F6;
+    --green:#1E8E5A;
+    --amber:#B7791F;
+    --red:#C0392B;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--white);color:var(--slate-900);
+    font-family:'Inter',sans-serif;font-size:14.5px;-webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:'Manrope',sans-serif;margin:0;}
+
+  /* ---- Cabeçalho / marca ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 32px;border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:11px;}
+  .brand .mark{
+    width:36px;height:36px;border-radius:9px;
+    background:linear-gradient(135deg,var(--blue-600),var(--blue-950));
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-family:'Manrope',sans-serif;font-weight:800;font-size:16px;letter-spacing:-.02em;
+  }
+  .brand .name{font-family:'Manrope',sans-serif;font-weight:800;font-size:19px;color:var(--blue-950);letter-spacing:-.01em;}
+  .brand .name span{color:var(--blue-600);}
+  .brand .tagline{font-size:11px;color:var(--slate-500);margin-top:-2px;}
+  .processo-chip{
+    display:flex;align-items:center;gap:8px;background:var(--blue-50);
+    border:1px solid var(--blue-100);border-radius:20px;padding:6px 14px;
+    font-size:12.5px;color:var(--blue-800);font-weight:600;
+  }
+  .processo-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--blue-600);}
+
+  /* ---- Cascata de abas: nível 1 ---- */
+  .tabs-l1{display:flex;gap:6px;padding:14px 32px 0 32px;border-bottom:1px solid var(--line);}
+  .tab-l1{
+    padding:10px 18px;border:none;background:none;cursor:pointer;white-space:nowrap;
+    font-family:'Inter',sans-serif;font-weight:600;font-size:13.5px;color:var(--slate-500);
+    border-bottom:2px solid transparent;margin-bottom:-1px;min-height:44px;
+  }
+  .tab-l1:hover{color:var(--blue-800);}
+  .tab-l1.active{color:var(--blue-600);border-bottom:2px solid var(--blue-600);}
+
+  /* ---- Cascata de abas: nível 2 (aparece "em cascata" abaixo do nível 1) ---- */
+  .tabs-l2{display:flex;gap:8px;padding:12px 32px;background:var(--blue-50);border-bottom:1px solid var(--line);}
+  .tab-l2{
+    padding:8px 14px;border:1px solid transparent;border-radius:20px;background:none;cursor:pointer;white-space:nowrap;
+    font-family:'Inter',sans-serif;font-weight:500;font-size:12.5px;color:var(--blue-800);min-height:38px;
+  }
+  .tab-l2:hover{background:var(--white);}
+  .tab-l2.active{background:var(--white);border-color:var(--blue-100);color:var(--blue-950);font-weight:600;box-shadow:0 1px 2px rgba(10,42,94,.06);}
+
+  main{padding:28px 32px 60px 32px;max-width:900px;}
+  .page-title{margin-bottom:20px;}
+  .page-title h2{font-size:22px;color:var(--blue-950);}
+  .page-title p{font-size:13px;color:var(--slate-500);margin-top:4px;}
+
+  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;margin-bottom:16px;}
+  .card h3{font-size:14.5px;color:var(--blue-950);margin-bottom:14px;}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+  label{display:block;font-size:12px;font-weight:600;color:var(--slate-500);margin-bottom:5px;}
+  input,select,textarea{
+    width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;
+    font-family:'Inter',sans-serif;font-size:16px;background:var(--white);color:var(--slate-900);
+    min-height:44px;
+  }
+  textarea{min-height:0;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue-600);box-shadow:0 0 0 3px var(--blue-100);}
+
+  button.primary{
+    background:var(--blue-600);color:#fff;border:none;padding:12px 22px;min-height:44px;
+    border-radius:8px;font-weight:600;font-size:14.5px;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  button.primary:hover{background:var(--blue-800);}
+  button.ghost{
+    background:var(--white);border:1px solid var(--blue-100);color:var(--blue-600);padding:11px 20px;min-height:44px;
+    border-radius:8px;font-weight:600;font-size:14.5px;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  button.ghost:hover{background:var(--blue-50);}
+  .row-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+  .row-actions button{flex:1 1 auto;}
+
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px;}
+  table{width:100%;min-width:520px;border-collapse:collapse;font-size:12.8px;}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500);border-bottom:1px solid var(--line);padding:9px 6px;}
+  td{padding:10px 6px;border-bottom:1px solid var(--blue-50);}
+  tr:hover td{background:var(--blue-50);}
+
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+  .badge.ok{background:#E4F6EC;color:var(--green);}
+  .badge.warn{background:#FBF0DD;color:var(--amber);}
+  .badge.alert{background:#FBE7E4;color:var(--red);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:6px;}
+  .stat{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--blue-50);}
+  .stat .n{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:var(--blue-950);}
+  .stat .l{font-size:11px;color:var(--slate-500);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+
+  .empty{padding:36px 10px;text-align:center;color:var(--slate-500);}
+  .subpanel{display:none;}
+  .subpanel.active{display:block;}
+
+  .combo-add{display:flex;gap:6px;}
+  .combo-add select{flex:1;}
+  .combo-add-btn{
+    flex-shrink:0;width:44px;height:44px;border-radius:8px;border:1px solid var(--blue-100);
+    background:var(--blue-50);color:var(--blue-600);font-size:20px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;line-height:1;
+  }
+  .combo-add-btn:hover{background:var(--blue-100);}
+
+  .toast{
+    position:fixed;bottom:24px;right:24px;background:var(--blue-950);color:#fff;
+    padding:12px 18px;border-radius:8px;font-size:13px;box-shadow:0 8px 22px rgba(10,42,94,.25);
+    opacity:0;transform:translateY(8px);transition:all .25s ease;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+  .toast.error{background:var(--red);}
+
+  @media(max-width:760px){
+    .topbar{padding:12px 14px;}
+    .brand .tagline{display:none;}
+    .tabs-l1,.tabs-l2{padding-left:14px;padding-right:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .tabs-l1::-webkit-scrollbar,.tabs-l2::-webkit-scrollbar{display:none;}
+    main{padding:18px 14px 50px 14px;}
+    .card{padding:18px 16px;}
+    .grid{grid-template-columns:1fr;gap:12px;}
+    .processo-chip{padding:5px 10px;}
+    .processo-chip span.txt{display:none;}
+    .row-actions{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="mark">MG</div>
+    <div>
+      <div class="name">MG<span>laud</span></div>
+      <div class="tagline">Gestão de vistorias periciais</div>
+    </div>
+  </div>
+  <div class="processo-chip" id="processoChip" style="display:none;">
+    <span class="dot"></span><span class="txt" id="processoChipTxt">—</span>
+  </div>
+</div>
+
+<div class="tabs-l1" id="tabsL1"></div>
+<div class="tabs-l2" id="tabsL2" style="display:none;"></div>
+
+<main id="main"></main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIGURAÇÃO
+   ========================================================= */
+const API_URL = "https://script.google.com/macros/s/AKfycbxG3dg10qqCBW0heaPX3N186ZtekW3w91F5OA9QWPyVFvHSlA1z7kfDPLxFIL-xyngj/exec";
+
+const L1_TABS = [
+  { id: 'processos', label: 'Processos' },
+  { id: 'vistoria',  label: 'Vistoria' },
+  { id: 'amostras',  label: 'Amostras' },
+  { id: 'resultado', label: 'Resultado' },
+  { id: 'gestao',    label: 'Quesitos & Prazos' }
+];
+
+const L2_TABS = {
+  vistoria: [
+    { id: 'identificacao', label: 'Identificação' },
+    { id: 'construcao',    label: 'Áreas & Construção' },
+    { id: 'regiao',        label: 'Região' },
+    { id: 'fotos',         label: 'Fotos & Observações' }
+  ],
+  gestao: [
+    { id: 'quesitos', label: 'Quesitos' },
+    { id: 'prazos',   label: 'Prazos' }
+  ]
+};
+
+const state = {
+  tab: 'processos',
+  subtab: null,
+  processos: [],
+  processoAtual: null,
+  amostras: []
+};
+
+/* =========================================================
+   API
+   ========================================================= */
+async function apiGet(action, params = {}) {
+  const qs = new URLSearchParams({ action, ...params }).toString();
+  const res = await fetch(`${API_URL}?${qs}`);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.erro || 'Erro desconhecido na API');
+  return json.data;
+}
+
+async function apiPost(action, dados = {}) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, dados })
+  });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.erro || 'Erro desconhecido na API');
+  return json.data;
+}
+
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+/* =========================================================
+   Combos expansíveis (select + botão "+")
+   Cada categoria é lida/gravada na aba 10_Config_Listas.
+   ========================================================= */
+async function inicializarCombos(escopo) {
+  const combos = escopo.querySelectorAll('.combo-add');
+  await Promise.all(Array.from(combos).map(popularCombo));
+  combos.forEach(c => {
+    const btn = c.querySelector('.combo-add-btn');
+    btn.onclick = () => adicionarItemCombo(c);
+  });
+}
+
+async function popularCombo(container, manterSelecionado) {
+  const categoria = container.dataset.categoria;
+  const select = container.querySelector('select');
+  const atual = manterSelecionado || select.value;
+  const opcoes = await apiGet('listarOpcoes', { categoria });
+  select.innerHTML = opcoes.length
+    ? opcoes.map(o => `<option value="${o}">${o}</option>`).join('')
+    : `<option value="">— nenhum item, adicione com o botão + —</option>`;
+  if (atual && opcoes.includes(atual)) select.value = atual;
+}
+
+async function adicionarItemCombo(container) {
+  const categoria = container.dataset.categoria;
+  const label = container.parentElement.querySelector('label');
+  const rotulo = label ? label.textContent : categoria;
+  const novo = prompt(`Adicionar novo item em "${rotulo}":`);
+  if (!novo || !novo.trim()) return;
+  try {
+    const valorSalvo = await apiPost('adicionarOpcao', { Categoria: categoria, Valor: novo.trim() });
+    await popularCombo(container, valorSalvo);
+    toast(`"${valorSalvo}" adicionado.`);
+  } catch (err) { toast(err.message, true); }
+}
+
+/* =========================================================
+   Navegação em cascata (nível 1 -> nível 2)
+   ========================================================= */
+function buildTabsL1() {
+  const el = document.getElementById('tabsL1');
+  el.innerHTML = L1_TABS.map(t => `<button class="tab-l1" data-tab="${t.id}">${t.label}</button>`).join('');
+  el.querySelectorAll('.tab-l1').forEach(btn => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
+}
+
+function buildTabsL2() {
+  const el = document.getElementById('tabsL2');
+  const subtabs = L2_TABS[state.tab];
+  if (!subtabs) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = subtabs.map(t => `<button class="tab-l2" data-subtab="${t.id}">${t.label}</button>`).join('');
+  el.querySelectorAll('.tab-l2').forEach(btn => btn.addEventListener('click', () => setSubtab(btn.dataset.subtab)));
+  if (!state.subtab || !subtabs.find(t => t.id === state.subtab)) state.subtab = subtabs[0].id;
+  highlightTabs();
+}
+
+function highlightTabs() {
+  document.querySelectorAll('.tab-l1').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
+  document.querySelectorAll('.tab-l2').forEach(b => b.classList.toggle('active', b.dataset.subtab === state.subtab));
+}
+
+function setTab(tab) {
+  if (tab !== 'processos' && !state.processoAtual) {
+    toast('Selecione ou crie um processo primeiro.', true);
+    tab = 'processos';
+  }
+  state.tab = tab;
+  state.subtab = null;
+  buildTabsL2();
+  highlightTabs();
+  render();
+}
+
+function setSubtab(subtab) {
+  state.subtab = subtab;
+  highlightTabs();
+  document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === subtab));
+}
+
+function atualizarChip() {
+  const chip = document.getElementById('processoChip');
+  const txt = document.getElementById('processoChipTxt');
+  if (state.processoAtual) {
+    chip.style.display = 'flex';
+    const p = state.processos.find(p => p.ID_Processo === state.processoAtual);
+    txt.textContent = p ? `${p.ID_Processo} · ${p.Numero_Processo}` : state.processoAtual;
+  } else {
+    chip.style.display = 'none';
+  }
+}
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+async function render() {
+  const main = document.getElementById('main');
+  atualizarChip();
+  try {
+    if (state.tab === 'processos') await renderProcessos(main);
+    else if (state.tab === 'vistoria') await renderVistoria(main);
+    else if (state.tab === 'amostras') await renderAmostras(main);
+    else if (state.tab === 'resultado') await renderResultado(main);
+    else if (state.tab === 'gestao') await renderGestao(main);
+  } catch (err) {
+    main.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
+  }
+}
+
+/* ---- Processos ---- */
+async function renderProcessos(main) {
+  main.innerHTML = `
+    <div class="page-title"><h2>Processos</h2><p>Selecione um processo em andamento ou cadastre um novo.</p></div>
+    <div class="card">
+      <h3>Novo processo</h3>
+      <form id="formProcesso" class="grid">
+        <div><label>Nº do Processo</label><input name="Numero_Processo" required></div>
+        <div><label>Vara / Juízo</label>
+          <div class="combo-add" data-categoria="Vara_Juizo">
+            <select name="Vara_Juizo" required></select>
+            <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+          </div>
+        </div>
+        <div><label>Comarca</label>
+          <div class="combo-add" data-categoria="Comarca">
+            <select name="Comarca" required></select>
+            <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+          </div>
+        </div>
+        <div><label>Tipo de Ação</label>
+          <div class="combo-add" data-categoria="Tipo_Acao">
+            <select name="Tipo_Acao"></select>
+            <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+          </div>
+        </div>
+        <div><label>Requerente</label><input name="Requerente"></div>
+        <div><label>Requerido</label><input name="Requerido"></div>
+        <div><label>Finalidade da Avaliação</label>
+          <div class="combo-add" data-categoria="Finalidade_Avaliacao">
+            <select name="Finalidade_Avaliacao"></select>
+            <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+          </div>
+        </div>
+        <div><label>Perito Responsável</label>
+          <div class="combo-add" data-categoria="Perito_Responsavel">
+            <select name="Perito_Responsavel" required></select>
+            <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+          </div>
+        </div>
+        <div><label>Prazo de Entrega do Laudo</label><input type="date" name="Prazo_Entrega_Laudo"></div>
+      </form>
+      <div class="row-actions"><button class="primary" onclick="salvarProcesso()">Salvar processo</button></div>
+    </div>
+    <div class="card"><h3>Processos cadastrados</h3><div id="listaProcessos">Carregando…</div></div>
+  `;
+  await inicializarCombos(document.getElementById('formProcesso'));
+  const processos = await apiGet('listarProcessos');
+  state.processos = processos;
+  const lista = document.getElementById('listaProcessos');
+  lista.innerHTML = processos.length ? `
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID</th><th>Nº Processo</th><th>Comarca</th><th>Status</th><th></th></tr></thead>
+      <tbody>${processos.map(p => `
+        <tr>
+          <td>${p.ID_Processo}</td><td>${p.Numero_Processo}</td><td>${p.Comarca}</td>
+          <td>${badgeStatus(p.Status_Processo)}</td>
+          <td><button class="ghost" onclick="selecionarProcesso('${p.ID_Processo}')">Abrir</button></td>
+        </tr>`).join('')}</tbody>
+    </table></div>` : `<div class="empty">Nenhum processo cadastrado ainda.</div>`;
+}
+
+function badgeStatus(status) {
+  const s = (status || '').toLowerCase();
+  let cls = 'warn';
+  if (s.includes('entregue') || s.includes('conclu') || s.includes('cumprido') || s.includes('respondido')) cls = 'ok';
+  if (s.includes('impugn') || s.includes('atrasado')) cls = 'alert';
+  return `<span class="badge ${cls}">${status || '—'}</span>`;
+}
+
+async function salvarProcesso() {
+  const dados = Object.fromEntries(new FormData(document.getElementById('formProcesso')).entries());
+  dados.Status_Processo = 'Aguardando vistoria';
+  try {
+    const id = await apiPost('salvarProcesso', dados);
+    toast(`Processo ${id} criado.`);
+    state.processoAtual = id;
+    await render();
+  } catch (err) { toast(err.message, true); }
+}
+
+function selecionarProcesso(id) {
+  state.processoAtual = id;
+  setTab('vistoria');
+}
+
+/* ---- Vistoria (com subabas em cascata) ---- */
+async function renderVistoria(main) {
+  main.innerHTML = `
+    <div class="page-title"><h2>Vistoria do Avaliando</h2><p>Preencha por seção — os dados são salvos juntos ao final.</p></div>
+    <form id="formVistoria">
+      <div class="subpanel" data-subtab="identificacao">
+        <div class="card"><h3>Identificação e localização</h3>
+          <div class="grid">
+            <div style="grid-column:1/-1;"><label>Endereço completo</label><input name="Endereco_Completo" required></div>
+            <div><label>Bairro</label>
+              <div class="combo-add" data-categoria="Bairro">
+                <select name="Bairro"></select>
+                <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+              </div>
+            </div>
+            <div><label>Cidade/UF</label><input name="Cidade_UF"></div>
+            <div><label>Matrícula</label><input name="Matricula_Registro"></div>
+            <div><label>Nº IPTU</label><input name="Numero_IPTU"></div>
+          </div>
+        </div>
+      </div>
+      <div class="subpanel" data-subtab="construcao">
+        <div class="card"><h3>Tipo, uso e áreas</h3>
+          <div class="grid">
+            <div><label>Tipo de imóvel</label><select name="Tipo_Imovel"><option>Apartamento</option><option>Casa</option><option>Terreno</option><option>Sala Comercial</option></select></div>
+            <div><label>Padrão construtivo</label><select name="Padrao_Construtivo"><option>Simples (H1)</option><option selected>Normal (H2)</option><option>Alto (H3)</option><option>Luxo (H4)</option></select></div>
+            <div><label>Classificação do bairro</label><select name="Classificacao_Bairro"><option>nobre</option><option selected>médio</option><option>popular</option><option>periférico</option></select></div>
+            <div><label>Área privativa (m²)</label><input type="number" step="0.01" name="Area_Privativa_m2"></div>
+            <div><label>Área construída total (m²)</label><input type="number" step="0.01" name="Area_Construida_Total_m2"></div>
+            <div><label>Área do terreno (m²)</label><input type="number" step="0.01" name="Area_Terreno_m2"></div>
+          </div>
+        </div>
+        <div class="card"><h3>Características construtivas</h3>
+          <div class="grid">
+            <div><label>Conservação (1–10)</label><input type="number" min="1" max="10" name="Estado_Conservacao_1_10"></div>
+            <div><label>Andar do imóvel</label><input type="number" name="Andar_Imovel"></div>
+            <div><label>Vagas de garagem</label><input type="number" name="Vagas_Garagem"></div>
+            <div><label>Dormitórios</label><input type="number" name="Dormitorios"></div>
+            <div><label>Idade real (anos)</label><input type="number" name="Idade_Real_Anos"></div>
+          </div>
+        </div>
+      </div>
+      <div class="subpanel" data-subtab="regiao">
+        <div class="card"><h3>Região — NBR 14653-2</h3>
+          <div class="grid">
+            <div style="grid-column:1/-1;"><label>Aspectos físicos da região</label><textarea name="Aspectos_Fisicos_Regiao" rows="2"></textarea></div>
+            <div style="grid-column:1/-1;"><label>Equipamento comunitário</label><textarea name="Equipamento_Comunitario" rows="2"></textarea></div>
+            <div style="grid-column:1/-1;"><label>Tendências de desenvolvimento</label><textarea name="Tendencias_Desenvolvimento_Local" rows="2"></textarea></div>
+          </div>
+        </div>
+      </div>
+      <div class="subpanel" data-subtab="fotos">
+        <div class="card"><h3>Fotos e observações</h3>
+          <div class="grid">
+            <div style="grid-column:1/-1;"><label>Link das fotos (Google Drive)</label><input name="Fotos_Links_Drive"></div>
+            <div style="grid-column:1/-1;"><label>Observações do perito</label><textarea name="Observacoes_Perito" rows="3"></textarea></div>
+          </div>
+        </div>
+      </div>
+    </form>
+    <div class="row-actions"><button class="primary" onclick="salvarVistoria()">Salvar vistoria completa</button></div>
+  `;
+  document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === state.subtab));
+  await inicializarCombos(document.getElementById('formVistoria'));
+}
+
+async function salvarVistoria() {
+  const dados = Object.fromEntries(new FormData(document.getElementById('formVistoria')).entries());
+  dados.ID_Processo_FK = state.processoAtual;
+  try {
+    const id = await apiPost('salvarVistoria', dados);
+    toast(`Vistoria ${id} salva.`);
+    setTab('amostras');
+  } catch (err) { toast(err.message, true); }
+}
+
+/* ---- Amostras ---- */
+async function renderAmostras(main) {
+  main.innerHTML = `
+    <div class="page-title"><h2>Amostras de Mercado</h2><p>Mínimo recomendado: 5 amostras por processo.</p></div>
+    <div class="card">
+      <h3>Nova amostra</h3>
+      <form id="formAmostra" class="grid">
+        <div><label>Fonte</label><input name="Fonte_Anuncio"></div>
+        <div style="grid-column:span 2;"><label>Endereço</label><input name="Endereco"></div>
+        <div><label>Bairro</label>
+          <div class="combo-add" data-categoria="Bairro">
+            <select name="Bairro"></select>
+            <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+          </div>
+        </div>
+        <div><label>Tipo</label><select name="Tipo"><option>Apartamento</option><option>Casa</option><option>Terreno</option><option>Sala Comercial</option></select></div>
+        <div><label>Área (m²)</label><input type="number" step="0.01" name="Area_m2" required></div>
+        <div><label>Padrão</label><select name="Padrao_Construtivo"><option>Simples (H1)</option><option selected>Normal (H2)</option><option>Alto (H3)</option><option>Luxo (H4)</option></select></div>
+        <div><label>Conservação (1–10)</label><input type="number" min="1" max="10" name="Conservacao_1_10"></div>
+        <div><label>Andar</label><input type="number" name="Andar"></div>
+        <div><label>Vagas</label><input type="number" name="Vagas"></div>
+        <div><label>Dormitórios</label><input type="number" name="Dormitorios"></div>
+        <div><label>Classif. bairro</label><select name="Classificacao_Bairro"><option>nobre</option><option selected>médio</option><option>popular</option><option>periférico</option></select></div>
+        <div><label>Data pesquisa</label><input type="date" name="Data_Pesquisa"></div>
+        <div><label>Tipo de dado</label><select name="Tipo_Dado"><option>Oferta</option><option>Venda</option></select></div>
+        <div><label>Valor anunciado (R$)</label><input type="number" step="0.01" name="Valor_Anunciado_R$" required></div>
+        <div><label>Fator fonte</label><input type="number" step="0.01" name="Fator_Fonte" placeholder="0.90 se oferta"></div>
+        <div><label>Incluir no histórico?</label><select name="Incluir_no_Historico"><option>Sim</option><option>Não</option></select></div>
+      </form>
+      <div class="row-actions"><button class="primary" onclick="salvarAmostra(this)">Adicionar amostra</button></div>
+    </div>
+    <div class="card">
+      <h3>Amostras do processo <span id="contadorAmostras" style="font-weight:400;color:var(--slate-500);font-size:12px;"></span></h3>
+      <div id="listaAmostras">Carregando…</div>
+      <div class="row-actions"><button class="ghost" onclick="rodarHomogeneizacao(this)">Calcular homogeneização</button></div>
+      <div id="statsHomog"></div>
+    </div>
+  `;
+  await inicializarCombos(document.getElementById('formAmostra'));
+  await carregarAmostras();
+}
+
+async function carregarAmostras() {
+  const amostras = await apiGet('listarAmostras', { idProcesso: state.processoAtual });
+  state.amostras = amostras;
+  const contador = document.getElementById('contadorAmostras');
+  if (contador) contador.textContent = `(${amostras.length} — mínimo recomendado: 5)`;
+  const lista = document.getElementById('listaAmostras');
+  if (!lista) return; // a tela mudou antes da resposta chegar — nada a fazer
+  lista.innerHTML = amostras.length ? `
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID</th><th>Bairro</th><th>Área</th><th>Valor</th><th>Fator Total</th><th>Vlr. Unit. Homog.</th></tr></thead>
+      <tbody>${amostras.map(a => `
+        <tr><td>${a.ID_Amostra}</td><td>${a.Bairro || '—'}</td><td>${a.Area_m2 || '—'} m²</td>
+        <td>R$ ${Number(a['Valor_Anunciado_R$'] || 0).toLocaleString('pt-BR')}</td>
+        <td>${a.Fator_Total || '—'}</td>
+        <td>${a['Valor_Unit_Homogeneizado_R$m2'] ? 'R$ ' + Number(a['Valor_Unit_Homogeneizado_R$m2']).toLocaleString('pt-BR') : '—'}</td></tr>`).join('')}</tbody>
+    </table></div>` : `<div class="empty">Nenhuma amostra cadastrada ainda.</div>`;
+}
+
+async function salvarAmostra(btn) {
+  if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = 'Salvando…'; }
+  const form = document.getElementById('formAmostra');
+  const dados = Object.fromEntries(new FormData(form).entries());
+  dados.ID_Processo_FK = state.processoAtual;
+  dados['Valor_Ajustado_R$'] = (Number(dados['Valor_Anunciado_R$']) || 0) * (Number(dados.Fator_Fonte) || 0.9);
+  try {
+    await apiPost('salvarAmostra', dados);
+    toast('Amostra adicionada.');
+    form.reset();
+    await carregarAmostras();
+  } catch (err) { toast(err.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Adicionar amostra'; btn.dataset.busy = '0'; } }
+}
+
+async function rodarHomogeneizacao(btn) {
+  if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = 'Calculando…'; }
+  try {
+    const resultado = await apiGet('calcularHomogeneizacao', { idProcesso: state.processoAtual });
+    await carregarAmostras();
+    const s = resultado.estatisticas;
+    const box = document.getElementById('statsHomog');
+    if (box) {
+      box.innerHTML = `
+        <div class="stat-grid">
+          <div class="stat"><div class="n">${s.n}</div><div class="l">Amostras</div></div>
+          <div class="stat"><div class="n">R$ ${s.media.toLocaleString('pt-BR')}</div><div class="l">Média R$/m²</div></div>
+          <div class="stat"><div class="n">R$ ${s.mediana.toLocaleString('pt-BR')}</div><div class="l">Mediana R$/m²</div></div>
+          <div class="stat"><div class="n">${s.cv}%</div><div class="l">CV — ${s.grauNBR}</div></div>
+        </div>`;
+    }
+    toast('Homogeneização calculada.');
+  } catch (err) { toast(err.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Calcular homogeneização'; btn.dataset.busy = '0'; } }
+}
+
+/* ---- Resultado ---- */
+async function renderResultado(main) {
+  main.innerHTML = `
+    <div class="page-title"><h2>Resultado da Avaliação</h2><p>Valor de mercado final com depreciação, liquidez e intervalo de confiança.</p></div>
+    <div class="card">
+      <h3>Parâmetros finais</h3>
+      <form id="formResultado" class="grid">
+        <div><label>Área de cálculo (m²)</label><input type="number" step="0.01" name="areaCalculo" required></div>
+        <div><label>Depreciação (%)</label><input type="number" step="0.1" name="depreciacao" value="0"></div>
+        <div><label>Ajuste de liquidez (%)</label><input type="number" step="0.1" name="liquidez" value="0"></div>
+      </form>
+      <div class="row-actions"><button class="primary" onclick="calcularResultado()">Gerar resultado</button></div>
+    </div>
+    <div id="resultadoFinal"></div>
+  `;
+}
+
+async function calcularResultado() {
+  const d = Object.fromEntries(new FormData(document.getElementById('formResultado')).entries());
+  try {
+    const r = await apiGet('calcularResultado', { idProcesso: state.processoAtual, areaCalculo: d.areaCalculo, depreciacao: d.depreciacao, liquidez: d.liquidez });
+    document.getElementById('resultadoFinal').innerHTML = `
+      <div class="card"><h3>Valor de mercado adotado</h3>
+        <div class="stat-grid">
+          <div class="stat"><div class="n">R$ ${r.valorMercado.toLocaleString('pt-BR')}</div><div class="l">Valor central</div></div>
+          <div class="stat"><div class="n">R$ ${r.limiteInferior.toLocaleString('pt-BR')}</div><div class="l">Limite inferior (−15%)</div></div>
+          <div class="stat"><div class="n">R$ ${r.limiteSuperior.toLocaleString('pt-BR')}</div><div class="l">Limite superior (+15%)</div></div>
+          <div class="stat"><div class="n">${r.grauNBR}</div><div class="l">Grau (CV ${r.cv}%)</div></div>
+        </div>
+      </div>`;
+  } catch (err) { toast(err.message, true); }
+}
+
+/* ---- Gestão (com subabas Quesitos/Prazos) ---- */
+async function renderGestao(main) {
+  main.innerHTML = `
+    <div class="page-title"><h2>Quesitos &amp; Prazos</h2><p>Controle de quesitos do juízo/partes e prazos processuais.</p></div>
+    <div class="subpanel" data-subtab="quesitos">
+      <div class="card"><h3>Novo quesito</h3>
+        <form id="formQuesito" class="grid">
+          <div><label>Origem</label><select name="Origem"><option>Juiz</option><option>Autor</option><option>Réu</option><option>Assistente Técnico do Autor</option><option>Assistente Técnico do Réu</option></select></div>
+          <div style="grid-column:span 2;"><label>Texto do quesito</label><input name="Quesito_Texto" required></div>
+          <div><label>Data</label><input type="date" name="Data_Formulacao"></div>
+        </form>
+        <div class="row-actions"><button class="primary" onclick="salvarQuesito()">Adicionar quesito</button></div>
+      </div>
+      <div class="card"><h3>Quesitos do processo</h3><div id="listaQuesitos">Carregando…</div></div>
+    </div>
+    <div class="subpanel" data-subtab="prazos">
+      <div class="card"><h3>Novo prazo</h3>
+        <form id="formPrazo" class="grid">
+          <div><label>Tipo</label><select name="Tipo"><option>Prazo</option><option>Impugnação</option><option>Manifestação</option><option>Esclarecimento</option></select></div>
+          <div style="grid-column:span 2;"><label>Descrição</label><input name="Descricao" required></div>
+          <div><label>Data prevista</label><input type="date" name="Data_Prevista"></div>
+        </form>
+        <div class="row-actions"><button class="primary" onclick="salvarPrazo()">Adicionar prazo</button></div>
+      </div>
+      <div class="card"><h3>Prazos do processo</h3><div id="listaPrazos">Carregando…</div></div>
+    </div>
+  `;
+  document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === state.subtab));
+  await carregarQuesitos();
+  await carregarPrazos();
+}
+
+async function carregarQuesitos() {
+  const qs = await apiGet('listarQuesitos', { idProcesso: state.processoAtual });
+  document.getElementById('listaQuesitos').innerHTML = qs.length ? `
+    <div class="table-wrap"><table><thead><tr><th>Origem</th><th>Quesito</th><th>Status</th></tr></thead>
+    <tbody>${qs.map(q => `<tr><td>${q.Origem}</td><td>${q.Quesito_Texto}</td><td>${badgeStatus(q.Status)}</td></tr>`).join('')}</tbody></table></div>
+  ` : `<div class="empty">Nenhum quesito registrado.</div>`;
+}
+
+async function carregarPrazos() {
+  const pz = await apiGet('listarPrazos', { idProcesso: state.processoAtual });
+  document.getElementById('listaPrazos').innerHTML = pz.length ? `
+    <div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Descrição</th><th>Prevista</th><th>Status</th></tr></thead>
+    <tbody>${pz.map(p => `<tr><td>${p.Tipo}</td><td>${p.Descricao}</td><td>${p.Data_Prevista || '—'}</td><td>${badgeStatus(p.Status)}</td></tr>`).join('')}</tbody></table></div>
+  ` : `<div class="empty">Nenhum prazo registrado.</div>`;
+}
+
+async function salvarQuesito() {
+  const form = document.getElementById('formQuesito');
+  const dados = Object.fromEntries(new FormData(form).entries());
+  dados.ID_Processo_FK = state.processoAtual;
+  try { await apiPost('salvarQuesito', dados); toast('Quesito adicionado.'); form.reset(); await carregarQuesitos(); }
+  catch (err) { toast(err.message, true); }
+}
+
+async function salvarPrazo() {
+  const form = document.getElementById('formPrazo');
+  const dados = Object.fromEntries(new FormData(form).entries());
+  dados.ID_Processo_FK = state.processoAtual;
+  dados.Status = 'Pendente';
+  try { await apiPost('salvarPrazo', dados); toast('Prazo adicionado.'); form.reset(); await carregarPrazos(); }
+  catch (err) { toast(err.message, true); }
+}
+
+/* =========================================================
+   Início
+   ========================================================= */
+buildTabsL1();
+setTab('processos');
+</script>
+</body>
+</html>
