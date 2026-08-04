@@ -127,7 +127,14 @@
     border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
     animation:girar .7s linear infinite;vertical-align:-2px;margin-right:7px;
   }
+  .spinner-blue{
+    display:inline-block;width:14px;height:14px;border-radius:50%;
+    border:2px solid var(--blue-100);border-top-color:var(--blue-600);
+    animation:girar .7s linear infinite;vertical-align:-2px;margin-right:7px;
+  }
   @keyframes girar{to{transform:rotate(360deg);}}
+
+  .loading-inline{display:flex;align-items:center;gap:2px;padding:20px 0;color:var(--slate-500);font-size:13px;}
 
   .consulta-loading{
     display:flex;align-items:center;gap:12px;padding:18px 20px;
@@ -260,17 +267,49 @@ function toast(msg, isError = false) {
   setTimeout(() => el.classList.remove('show'), 3200);
 }
 
+/**
+ * Liga/desliga o estado de "carregando" num botão: mostra um spinner girando
+ * e desabilita o clique, restaurando o texto original ao final.
+ */
+function definirCarregando(btn, carregando, textoCarregando) {
+  if (!btn) return;
+  if (carregando) {
+    if (btn.dataset.textoOriginal === undefined) btn.dataset.textoOriginal = btn.innerHTML;
+    const corSpinner = btn.classList.contains('ghost') ? 'spinner-blue' : 'spinner';
+    btn.innerHTML = `<span class="${corSpinner}"></span>${textoCarregando || 'Aguarde…'}`;
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = btn.dataset.textoOriginal ?? btn.innerHTML;
+    btn.disabled = false;
+  }
+}
+
 /* =========================================================
    Combos expansíveis (select + botão "+")
    Cada categoria é lida/gravada na aba 10_Config_Listas.
    ========================================================= */
 async function inicializarCombos(escopo) {
   const combos = escopo.querySelectorAll('.combo-add');
-  await Promise.all(Array.from(combos).map(popularCombo));
+  await Promise.all(Array.from(combos).map(c => popularCombo(c)));
   combos.forEach(c => {
     const btn = c.querySelector('.combo-add-btn');
     btn.onclick = () => adicionarItemCombo(c);
   });
+}
+
+// Cache em memória de todas as listas (Comarca, Bairro, Tipo de Ação etc.) —
+// buscadas do servidor UMA vez por sessão, em uma única chamada, em vez de
+// uma chamada por combo toda vez que uma tela é aberta.
+let opcoesCache = null;
+let opcoesCachePromise = null;
+
+async function obterTodasOpcoes(forcarRecarga) {
+  if (forcarRecarga) { opcoesCache = null; opcoesCachePromise = null; }
+  if (opcoesCache) return opcoesCache;
+  if (!opcoesCachePromise) {
+    opcoesCachePromise = apiGet('listarTodasOpcoes').then(r => { opcoesCache = r; return r; });
+  }
+  return opcoesCachePromise;
 }
 
 async function popularCombo(container, manterSelecionado) {
@@ -278,11 +317,22 @@ async function popularCombo(container, manterSelecionado) {
   const select = container.querySelector('select');
   if (!select) return; // container sem select (ex.: campo de busca) — nada a fazer
   const atual = typeof manterSelecionado === 'string' ? manterSelecionado : select.value;
-  const opcoes = await apiGet('listarOpcoes', { categoria });
+  const todas = await obterTodasOpcoes();
+  const opcoes = todas[categoria] || [];
   select.innerHTML = opcoes.length
     ? opcoes.map(o => `<option value="${o}">${o}</option>`).join('')
     : `<option value="">— nenhum item, adicione com o botão + —</option>`;
   if (atual && opcoes.includes(atual)) select.value = atual;
+}
+
+/** Registra uma opção nova no cache local, sem precisar rebuscar tudo do servidor. */
+function registrarOpcaoNoCache(categoria, valor) {
+  if (!opcoesCache) return;
+  if (!opcoesCache[categoria]) opcoesCache[categoria] = [];
+  if (!opcoesCache[categoria].includes(valor)) {
+    opcoesCache[categoria].push(valor);
+    opcoesCache[categoria].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }
 }
 
 async function adicionarItemCombo(container) {
@@ -293,6 +343,7 @@ async function adicionarItemCombo(container) {
   if (!novo || !novo.trim()) return;
   try {
     const valorSalvo = await apiPost('adicionarOpcao', { Categoria: categoria, Valor: novo.trim() });
+    registrarOpcaoNoCache(categoria, valorSalvo);
     await popularCombo(container, valorSalvo);
     toast(`"${valorSalvo}" adicionado.`);
   } catch (err) { toast(err.message, true); }
@@ -391,12 +442,14 @@ async function aplicarDadosDatajud(btn) {
     const comboVara = form.querySelector('[data-categoria="Vara_Juizo"]');
     if (comboVara && r.orgaoJulgador) {
       const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Vara_Juizo', Valor: r.orgaoJulgador });
+      registrarOpcaoNoCache('Vara_Juizo', valorSalvo);
       await popularCombo(comboVara, valorSalvo);
     }
     // Tipo de Ação
     const comboTipo = form.querySelector('[data-categoria="Tipo_Acao"]');
     if (comboTipo && r.classe) {
       const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Tipo_Acao', Valor: r.classe });
+      registrarOpcaoNoCache('Tipo_Acao', valorSalvo);
       await popularCombo(comboTipo, valorSalvo);
     }
     // Comarca (extraída do nome do órgão julgador, quando possível)
@@ -404,6 +457,7 @@ async function aplicarDadosDatajud(btn) {
     const comboComarca = form.querySelector('[data-categoria="Comarca"]');
     if (comboComarca && comarcaDetectada) {
       const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Comarca', Valor: comarcaDetectada });
+      registrarOpcaoNoCache('Comarca', valorSalvo);
       await popularCombo(comboComarca, valorSalvo);
     }
     // Data de distribuição (campo oculto)
@@ -540,12 +594,14 @@ async function renderProcessos(main) {
         <div><label>Prazo de Entrega do Laudo</label><input type="date" name="Prazo_Entrega_Laudo"></div>
         <input type="hidden" name="Data_Distribuicao">
       </form>
-      <div class="row-actions"><button class="primary" onclick="salvarProcesso()">Salvar processo</button></div>
+      <div class="row-actions"><button class="primary" onclick="salvarProcesso(this)">Salvar processo</button></div>
     </div>
-    <div class="card"><h3>Processos cadastrados</h3><div id="listaProcessos">Carregando…</div></div>
+    <div class="card"><h3>Processos cadastrados</h3><div id="listaProcessos"><div class="loading-inline"><span class="spinner-blue"></span>Carregando…</div></div></div>
   `;
-  await inicializarCombos(document.getElementById('formProcesso'));
-  const processos = await apiGet('listarProcessos');
+  const [, processos] = await Promise.all([
+    inicializarCombos(document.getElementById('formProcesso')),
+    apiGet('listarProcessos')
+  ]);
   state.processos = processos;
   const lista = document.getElementById('listaProcessos');
   lista.innerHTML = processos.length ? `
@@ -568,7 +624,8 @@ function badgeStatus(status) {
   return `<span class="badge ${cls}">${status || '—'}</span>`;
 }
 
-async function salvarProcesso() {
+async function salvarProcesso(btn) {
+  definirCarregando(btn, true, 'Salvando…');
   const dados = Object.fromEntries(new FormData(document.getElementById('formProcesso')).entries());
   dados.Status_Processo = 'Aguardando vistoria';
   try {
@@ -576,7 +633,7 @@ async function salvarProcesso() {
     toast(`Processo ${id} criado.`);
     state.processoAtual = id;
     await render();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
 }
 
 function selecionarProcesso(id) {
@@ -644,20 +701,21 @@ async function renderVistoria(main) {
         </div>
       </div>
     </form>
-    <div class="row-actions"><button class="primary" onclick="salvarVistoria()">Salvar vistoria completa</button></div>
+    <div class="row-actions"><button class="primary" onclick="salvarVistoria(this)">Salvar vistoria completa</button></div>
   `;
   document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === state.subtab));
   await inicializarCombos(document.getElementById('formVistoria'));
 }
 
-async function salvarVistoria() {
+async function salvarVistoria(btn) {
+  definirCarregando(btn, true, 'Salvando…');
   const dados = Object.fromEntries(new FormData(document.getElementById('formVistoria')).entries());
   dados.ID_Processo_FK = state.processoAtual;
   try {
     const id = await apiPost('salvarVistoria', dados);
     toast(`Vistoria ${id} salva.`);
     setTab('amostras');
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
 }
 
 /* ---- Amostras ---- */
@@ -667,7 +725,12 @@ async function renderAmostras(main) {
     <div class="card">
       <h3>Nova amostra</h3>
       <form id="formAmostra" class="grid">
-        <div><label>Fonte</label><input name="Fonte_Anuncio"></div>
+        <div><label>Fonte</label>
+          <div class="combo-add" data-categoria="Fonte_Anuncio">
+            <select name="Fonte_Anuncio"></select>
+            <button type="button" class="combo-add-btn" title="Adicionar novo">+</button>
+          </div>
+        </div>
         <div style="grid-column:span 2;"><label>Endereço</label><input name="Endereco"></div>
         <div><label>Bairro</label>
           <div class="combo-add" data-categoria="Bairro">
@@ -693,7 +756,7 @@ async function renderAmostras(main) {
     </div>
     <div class="card">
       <h3>Amostras do processo <span id="contadorAmostras" style="font-weight:400;color:var(--slate-500);font-size:12px;"></span></h3>
-      <div id="listaAmostras">Carregando…</div>
+      <div id="listaAmostras"><div class="loading-inline"><span class="spinner-blue"></span>Carregando…</div></div>
       <div class="grid" style="margin-top:14px;max-width:280px;">
         <div><label>Índice de correção monetária</label>
           <select id="indiceCorrecao">
@@ -731,7 +794,7 @@ async function carregarAmostras() {
 }
 
 async function salvarAmostra(btn) {
-  if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = 'Salvando…'; }
+  if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; definirCarregando(btn, true, 'Salvando…'); }
   const form = document.getElementById('formAmostra');
   const dados = Object.fromEntries(new FormData(form).entries());
   dados.ID_Processo_FK = state.processoAtual;
@@ -742,11 +805,11 @@ async function salvarAmostra(btn) {
     form.reset();
     await carregarAmostras();
   } catch (err) { toast(err.message, true); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = 'Adicionar amostra'; btn.dataset.busy = '0'; } }
+  finally { if (btn) { definirCarregando(btn, false); btn.dataset.busy = '0'; } }
 }
 
 async function rodarHomogeneizacao(btn) {
-  if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = 'Calculando…'; }
+  if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; definirCarregando(btn, true, 'Calculando…'); }
   try {
     const resultado = await apiGet('calcularHomogeneizacao', {
       idProcesso: state.processoAtual,
@@ -769,7 +832,7 @@ async function rodarHomogeneizacao(btn) {
     }
     toast('Homogeneização calculada.');
   } catch (err) { toast(err.message, true); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = 'Calcular homogeneização'; btn.dataset.busy = '0'; } }
+  finally { if (btn) { definirCarregando(btn, false); btn.dataset.busy = '0'; } }
 }
 
 /* ---- Resultado ---- */
@@ -783,13 +846,14 @@ async function renderResultado(main) {
         <div><label>Depreciação (%)</label><input type="number" step="0.1" name="depreciacao" value="0"></div>
         <div><label>Ajuste de liquidez (%)</label><input type="number" step="0.1" name="liquidez" value="0"></div>
       </form>
-      <div class="row-actions"><button class="primary" onclick="calcularResultado()">Gerar resultado</button></div>
+      <div class="row-actions"><button class="primary" onclick="calcularResultado(this)">Gerar resultado</button></div>
     </div>
     <div id="resultadoFinal"></div>
   `;
 }
 
-async function calcularResultado() {
+async function calcularResultado(btn) {
+  definirCarregando(btn, true, 'Calculando…');
   const d = Object.fromEntries(new FormData(document.getElementById('formResultado')).entries());
   try {
     const r = await apiGet('calcularResultado', { idProcesso: state.processoAtual, areaCalculo: d.areaCalculo, depreciacao: d.depreciacao, liquidez: d.liquidez });
@@ -803,6 +867,7 @@ async function calcularResultado() {
         </div>
       </div>`;
   } catch (err) { toast(err.message, true); }
+  finally { definirCarregando(btn, false); }
 }
 
 /* ---- Gestão (com subabas Quesitos/Prazos) ---- */
@@ -816,9 +881,9 @@ async function renderGestao(main) {
           <div style="grid-column:span 2;"><label>Texto do quesito</label><input name="Quesito_Texto" required></div>
           <div><label>Data</label><input type="date" name="Data_Formulacao"></div>
         </form>
-        <div class="row-actions"><button class="primary" onclick="salvarQuesito()">Adicionar quesito</button></div>
+        <div class="row-actions"><button class="primary" onclick="salvarQuesito(this)">Adicionar quesito</button></div>
       </div>
-      <div class="card"><h3>Quesitos do processo</h3><div id="listaQuesitos">Carregando…</div></div>
+      <div class="card"><h3>Quesitos do processo</h3><div id="listaQuesitos"><div class="loading-inline"><span class="spinner-blue"></span>Carregando…</div></div></div>
     </div>
     <div class="subpanel" data-subtab="prazos">
       <div class="card"><h3>Novo prazo</h3>
@@ -827,14 +892,13 @@ async function renderGestao(main) {
           <div style="grid-column:span 2;"><label>Descrição</label><input name="Descricao" required></div>
           <div><label>Data prevista</label><input type="date" name="Data_Prevista"></div>
         </form>
-        <div class="row-actions"><button class="primary" onclick="salvarPrazo()">Adicionar prazo</button></div>
+        <div class="row-actions"><button class="primary" onclick="salvarPrazo(this)">Adicionar prazo</button></div>
       </div>
-      <div class="card"><h3>Prazos do processo</h3><div id="listaPrazos">Carregando…</div></div>
+      <div class="card"><h3>Prazos do processo</h3><div id="listaPrazos"><div class="loading-inline"><span class="spinner-blue"></span>Carregando…</div></div></div>
     </div>
   `;
   document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === state.subtab));
-  await carregarQuesitos();
-  await carregarPrazos();
+  await Promise.all([carregarQuesitos(), carregarPrazos()]);
 }
 
 async function carregarQuesitos() {
@@ -853,21 +917,25 @@ async function carregarPrazos() {
   ` : `<div class="empty">Nenhum prazo registrado.</div>`;
 }
 
-async function salvarQuesito() {
+async function salvarQuesito(btn) {
+  definirCarregando(btn, true, 'Salvando…');
   const form = document.getElementById('formQuesito');
   const dados = Object.fromEntries(new FormData(form).entries());
   dados.ID_Processo_FK = state.processoAtual;
   try { await apiPost('salvarQuesito', dados); toast('Quesito adicionado.'); form.reset(); await carregarQuesitos(); }
   catch (err) { toast(err.message, true); }
+  finally { definirCarregando(btn, false); }
 }
 
-async function salvarPrazo() {
+async function salvarPrazo(btn) {
+  definirCarregando(btn, true, 'Salvando…');
   const form = document.getElementById('formPrazo');
   const dados = Object.fromEntries(new FormData(form).entries());
   dados.ID_Processo_FK = state.processoAtual;
   dados.Status = 'Pendente';
   try { await apiPost('salvarPrazo', dados); toast('Prazo adicionado.'); form.reset(); await carregarPrazos(); }
   catch (err) { toast(err.message, true); }
+  finally { definirCarregando(btn, false); }
 }
 
 /* =========================================================
