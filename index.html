@@ -160,6 +160,7 @@
   .combo-add select{flex:1;}
   .search-inline{display:flex;gap:6px;}
   .search-inline input{flex:1;}
+  #inputCep{max-width:170px;flex:0 0 170px;}
   .combo-add-btn{
     flex-shrink:0;width:44px;height:44px;border-radius:8px;border:1px solid var(--blue-100);
     background:var(--blue-50);color:var(--blue-600);font-size:20px;font-weight:600;cursor:pointer;
@@ -741,7 +742,7 @@ async function renderVistoria(main) {
       <div class="subpanel" data-subtab="identificacao">
         <div class="card"><h3>Identificação e localização</h3>
           <div class="grid">
-            <div style="grid-column:1/-1;max-width:260px;"><label>CEP</label>
+            <div style="grid-column:1/-1;"><label>CEP</label>
               <div class="search-inline">
                 <input name="CEP" id="inputCep" placeholder="00000-000" inputmode="numeric">
                 <button type="button" class="combo-add-btn" title="Buscar endereço pelo CEP" onclick="buscarCep(this)">⌕</button>
