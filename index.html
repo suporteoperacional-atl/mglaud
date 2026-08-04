@@ -227,13 +227,14 @@ const L1_TABS = [
 const L2_TABS = {
   vistoria: [
     { id: 'identificacao', label: 'Identificação' },
-    { id: 'construcao',    label: 'Áreas & Construção' },
-    { id: 'regiao',        label: 'Região' },
-    { id: 'fotos',         label: 'Fotos & Observações' }
+    { id: 'imovel', label: 'Imóvel & Áreas' },
+    { id: 'construcao', label: 'Construção' },
+    { id: 'infraestrutura', label: 'Infraestrutura & Região' },
+    { id: 'fotos', label: 'Fotos & Observações' }
   ],
   gestao: [
     { id: 'quesitos', label: 'Quesitos' },
-    { id: 'prazos',   label: 'Prazos' }
+    { id: 'prazos', label: 'Prazos' }
   ]
 };
 
@@ -325,12 +326,16 @@ async function popularCombo(container, manterSelecionado) {
   const select = container.querySelector('select');
   if (!select) return; // container sem select (ex.: campo de busca) — nada a fazer
   const atual = typeof manterSelecionado === 'string' ? manterSelecionado : select.value;
-  const todas = await obterTodasOpcoes();
-  const opcoes = todas[categoria] || [];
-  select.innerHTML = opcoes.length
-    ? opcoes.map(o => `<option value="${o}">${o}</option>`).join('')
-    : `<option value="">— nenhum item, adicione com o botão + —</option>`;
-  if (atual && opcoes.includes(atual)) select.value = atual;
+  try {
+    const todas = await obterTodasOpcoes();
+    const opcoes = todas[categoria] || [];
+    select.innerHTML = opcoes.length
+      ? opcoes.map(o => `<option value="${o}">${o}</option>`).join('')
+      : `<option value="">— nenhum item, adicione com o botão + —</option>`;
+    if (atual && opcoes.includes(atual)) select.value = atual;
+  } catch (err) {
+    select.innerHTML = `<option value="">⚠ erro ao carregar — tente de novo</option>`;
+  }
 }
 
 /** Registra uma opção nova no cache local, sem precisar rebuscar tudo do servidor. */
@@ -495,9 +500,8 @@ function buildTabsL1() {
 function abaHabilitada(tabId) {
   if (tabId === 'processos') return true;
   if (!state.processoAtual) return false;
-  if (tabId === 'vistoria' || tabId === 'gestao') return true;
-  if (tabId === 'amostras') return state.progresso.vistoria;
-  if (tabId === 'resultado') return state.progresso.amostras;
+  if (tabId === 'vistoria' || tabId === 'gestao' || tabId === 'amostras') return true;
+  if (tabId === 'resultado') return state.progresso.vistoria && state.progresso.amostras;
   return true;
 }
 
@@ -529,8 +533,7 @@ function setTab(tab) {
   if (!abaHabilitada(tab)) {
     const mensagens = {
       vistoria: 'Crie ou selecione um processo primeiro.',
-      amostras: 'Salve a vistoria do avaliando primeiro.',
-      resultado: 'Cadastre e calcule ao menos uma amostra primeiro.'
+      resultado: 'Salve a vistoria do avaliando e cadastre ao menos uma amostra primeiro.'
     };
     toast(mensagens[tab] || 'Complete a etapa anterior primeiro.', true);
     return;
@@ -735,43 +738,94 @@ async function renderVistoria(main) {
             <div><label>Cidade/UF</label><input name="Cidade_UF" id="inputCidadeUf"></div>
             <div><label>Matrícula</label><input name="Matricula_Registro"></div>
             <div><label>Nº IPTU</label><input name="Numero_IPTU"></div>
+            <div><label>Valor venal (IPTU)</label><input type="number" step="0.01" name="Valor_Venal_IPTU"></div>
           </div>
         </div>
       </div>
-      <div class="subpanel" data-subtab="construcao">
-        <div class="card"><h3>Tipo, uso e áreas</h3>
+
+      <div class="subpanel" data-subtab="imovel">
+        <div class="card"><h3>Tipo, uso e classificação</h3>
           <div class="grid">
             <div><label>Tipo de imóvel</label><select name="Tipo_Imovel"><option>Apartamento</option><option>Casa</option><option>Terreno</option><option>Sala Comercial</option></select></div>
+            <div><label>Uso</label><select name="Uso"><option>Residencial</option><option>Comercial</option><option>Industrial</option><option>Misto</option></select></div>
             <div><label>Padrão construtivo</label><select name="Padrao_Construtivo"><option>Simples (H1)</option><option selected>Normal (H2)</option><option>Alto (H3)</option><option>Luxo (H4)</option></select></div>
             <div><label>Classificação do bairro</label><select name="Classificacao_Bairro"><option>nobre</option><option selected>médio</option><option>popular</option><option>periférico</option></select></div>
-            <div><label>Área privativa (m²)</label><input type="number" step="0.01" name="Area_Privativa_m2"></div>
-            <div><label>Área construída total (m²)</label><input type="number" step="0.01" name="Area_Construida_Total_m2"></div>
-            <div><label>Área do terreno (m²)</label><input type="number" step="0.01" name="Area_Terreno_m2"></div>
+          </div>
+        </div>
+        <div class="card"><h3>Áreas (m²)</h3>
+          <div class="grid">
+            <div><label>Área privativa</label><input type="number" step="0.01" name="Area_Privativa_m2"></div>
+            <div><label>Área construída total</label><input type="number" step="0.01" name="Area_Construida_Total_m2"></div>
+            <div><label>Área comum</label><input type="number" step="0.01" name="Area_Comum_m2"></div>
+            <div><label>Área do terreno</label><input type="number" step="0.01" name="Area_Terreno_m2"></div>
+            <div><label>Área de garagem</label><input type="number" step="0.01" name="Area_Garagem_m2"></div>
+          </div>
+        </div>
+        <div class="card"><h3>Distribuição interna</h3>
+          <div class="grid">
+            <div><label>Dormitórios</label><input type="number" name="Dormitorios"></div>
+            <div><label>Banheiros</label><input type="number" name="Banheiros"></div>
+            <div><label>Vagas de garagem</label><input type="number" name="Vagas_Garagem"></div>
+            <div><label>Andar do imóvel</label><input type="number" name="Andar_Imovel"></div>
+            <div><label>Andares do edifício</label><input type="number" name="Andares_Edificio"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subpanel" data-subtab="construcao">
+        <div class="card"><h3>Idade e conservação</h3>
+          <div class="grid">
+            <div><label>Idade real (anos)</label><input type="number" name="Idade_Real_Anos"></div>
+            <div><label>Idade aparente (anos)</label><input type="number" name="Idade_Aparente_Anos"></div>
+            <div><label>Estado de conservação (1–10)</label><input type="number" min="1" max="10" name="Estado_Conservacao_1_10"></div>
           </div>
         </div>
         <div class="card"><h3>Características construtivas</h3>
           <div class="grid">
-            <div><label>Conservação (1–10)</label><input type="number" min="1" max="10" name="Estado_Conservacao_1_10"></div>
-            <div><label>Andar do imóvel</label><input type="number" name="Andar_Imovel"></div>
-            <div><label>Vagas de garagem</label><input type="number" name="Vagas_Garagem"></div>
-            <div><label>Dormitórios</label><input type="number" name="Dormitorios"></div>
-            <div><label>Idade real (anos)</label><input type="number" name="Idade_Real_Anos"></div>
+            <div><label>Estrutura</label><select name="Estrutura"><option>Concreto Armado</option><option>Alvenaria</option><option>Madeira</option><option>Estrutura Metálica</option><option>Mista</option></select></div>
+            <div><label>Cobertura</label><select name="Cobertura"><option>Laje</option><option>Telha Cerâmica</option><option>Telha Metálica</option><option>Fibrocimento</option></select></div>
+            <div><label>Revestimento externo</label><select name="Revestimento_Externo"><option>Pintura</option><option>Textura</option><option>Cerâmica/Porcelanato</option><option>Pastilha</option><option>Reboco aparente</option></select></div>
+            <div><label>Revestimento interno</label><select name="Revestimento_Interno"><option>Pintura</option><option>Cerâmica/Porcelanato</option><option>Gesso</option><option>Textura</option></select></div>
+            <div><label>Esquadrias</label><select name="Esquadrias"><option>Alumínio</option><option>Madeira</option><option>PVC</option><option>Ferro</option></select></div>
+            <div><label>Piso principal</label><select name="Piso_Principal"><option>Porcelanato</option><option>Cerâmica</option><option>Laminado</option><option>Madeira</option><option>Cimento queimado</option><option>Carpete</option></select></div>
+          </div>
+        </div>
+        <div class="card"><h3>Comodidades</h3>
+          <div class="grid">
+            <div><label>Elevador</label><select name="Possui_Elevador"><option>Não</option><option>Sim</option></select></div>
+            <div><label>Piscina</label><select name="Possui_Piscina"><option>Não</option><option>Sim</option></select></div>
+            <div><label>Segurança/Portaria</label><select name="Possui_Seguranca"><option>Não</option><option>Sim</option></select></div>
           </div>
         </div>
       </div>
-      <div class="subpanel" data-subtab="regiao">
+
+      <div class="subpanel" data-subtab="infraestrutura">
+        <div class="card"><h3>Infraestrutura urbana</h3>
+          <div class="grid">
+            <div><label>Pavimentação</label><select name="Pavimentacao"><option>Asfalto</option><option>Paralelepípedo</option><option>Terra</option><option>Não pavimentada</option></select></div>
+            <div><label>Rede de água</label><select name="Rede_Agua"><option>Sim</option><option>Não</option></select></div>
+            <div><label>Rede de esgoto</label><select name="Rede_Esgoto"><option>Sim</option><option>Não</option></select></div>
+            <div><label>Energia elétrica</label><select name="Energia_Eletrica"><option>Sim</option><option>Não</option></select></div>
+            <div><label>Iluminação pública</label><select name="Iluminacao_Publica"><option>Sim</option><option>Não</option></select></div>
+            <div><label>Coleta de lixo</label><select name="Coleta_Lixo"><option>Sim</option><option>Não</option></select></div>
+            <div><label>Transporte público próximo</label><select name="Transporte_Publico"><option>Sim</option><option>Não</option></select></div>
+            <div><label>Comércio no entorno</label><select name="Comercio_Entorno"><option>Sim</option><option>Não</option></select></div>
+            <div><label>Escola/Saúde próximos</label><select name="Escola_Saude_Prox"><option>Sim</option><option>Não</option></select></div>
+          </div>
+        </div>
         <div class="card"><h3>Região — NBR 14653-2</h3>
           <div class="grid">
-            <div style="grid-column:1/-1;"><label>Aspectos físicos da região</label><textarea name="Aspectos_Fisicos_Regiao" rows="2"></textarea></div>
-            <div style="grid-column:1/-1;"><label>Equipamento comunitário</label><textarea name="Equipamento_Comunitario" rows="2"></textarea></div>
+            <div style="grid-column:1/-1;"><label>Aspectos físicos da região</label><textarea name="Aspectos_Fisicos_Regiao" rows="2" placeholder="Topografia, uso do solo, restrições ambientais…"></textarea></div>
+            <div style="grid-column:1/-1;"><label>Equipamento comunitário</label><textarea name="Equipamento_Comunitario" rows="2" placeholder="Escolas, saúde, transporte, comércio…"></textarea></div>
             <div style="grid-column:1/-1;"><label>Tendências de desenvolvimento</label><textarea name="Tendencias_Desenvolvimento_Local" rows="2"></textarea></div>
           </div>
         </div>
       </div>
+
       <div class="subpanel" data-subtab="fotos">
         <div class="card"><h3>Fotos e observações</h3>
           <div class="grid">
-            <div style="grid-column:1/-1;"><label>Link das fotos (Google Drive)</label><input name="Fotos_Links_Drive"></div>
+            <div style="grid-column:1/-1;"><label>Link das fotos (Google Drive)</label><input name="Fotos_Links_Drive" placeholder="Cole o link da pasta do Drive"></div>
             <div style="grid-column:1/-1;"><label>Observações do perito</label><textarea name="Observacoes_Perito" rows="3"></textarea></div>
           </div>
         </div>
@@ -814,15 +868,22 @@ async function buscarCep(btn) {
     if (inputCidadeUf && dados.localidade && dados.uf) {
       inputCidadeUf.value = `${dados.localidade}/${dados.uf}`;
     }
-    if (dados.bairro) {
-      const comboBairro = document.querySelector('#formVistoria [data-categoria="Bairro"]');
-      if (comboBairro) {
+
+    const comboBairro = document.querySelector('#formVistoria [data-categoria="Bairro"]');
+    if (dados.bairro && comboBairro) {
+      try {
         const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Bairro', Valor: dados.bairro });
         registrarOpcaoNoCache('Bairro', valorSalvo);
         await popularCombo(comboBairro, valorSalvo);
+        toast('Endereço preenchido pelo CEP — confira o número e complemento.');
+      } catch (errBairro) {
+        toast('Endereço preenchido, mas não consegui salvar o bairro na lista — selecione manualmente.', true);
       }
+    } else if (!dados.bairro) {
+      toast('Endereço preenchido, mas esse CEP não retornou bairro — selecione manualmente na lista.', true);
+    } else {
+      toast('Endereço preenchido pelo CEP.');
     }
-    toast('Endereço preenchido pelo CEP — confira o número e complemento.');
   } catch (err) {
     toast('Não foi possível consultar o CEP agora.', true);
   } finally {
