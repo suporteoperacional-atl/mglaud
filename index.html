@@ -69,6 +69,7 @@
     padding:8px 14px;border:1px solid transparent;border-radius:20px;background:none;cursor:pointer;white-space:nowrap;
     font-family:'Inter',sans-serif;font-weight:500;font-size:12.5px;color:var(--blue-800);min-height:38px;
   }
+  .tab-l2:disabled,.tab-l2.disabled{opacity:.35;cursor:not-allowed;}
   .tab-l2:hover{background:var(--white);}
   .tab-l2.active{background:var(--white);border-color:var(--blue-100);color:var(--blue-950);font-weight:600;box-shadow:0 1px 2px rgba(10,42,94,.06);}
 
@@ -244,7 +245,8 @@ const state = {
   processos: [],
   processoAtual: null,
   amostras: [],
-  progresso: { vistoria: false, amostras: false, resultado: false }
+  progresso: { vistoria: false, amostras: false, resultado: false },
+  vistoriaProgresso: { identificacao: false, imovel: false, construcao: false, infraestrutura: false }
 };
 
 /* =========================================================
@@ -519,9 +521,25 @@ function buildTabsL2() {
   if (!subtabs) { el.style.display = 'none'; return; }
   el.style.display = 'flex';
   el.innerHTML = subtabs.map(t => `<button class="tab-l2" data-subtab="${t.id}">${t.label}</button>`).join('');
-  el.querySelectorAll('.tab-l2').forEach(btn => btn.addEventListener('click', () => setSubtab(btn.dataset.subtab)));
-  if (!state.subtab || !subtabs.find(t => t.id === state.subtab)) state.subtab = subtabs[0].id;
+  el.querySelectorAll('.tab-l2').forEach(btn => {
+    btn.addEventListener('click', () => setSubtab(btn.dataset.subtab));
+    const habilitada = subtabHabilitada(state.tab, btn.dataset.subtab);
+    btn.disabled = !habilitada;
+    btn.classList.toggle('disabled', !habilitada);
+  });
+  if (!state.subtab || !subtabs.find(t => t.id === state.subtab) || !subtabHabilitada(state.tab, state.subtab)) {
+    state.subtab = subtabs.find(t => subtabHabilitada(state.tab, t.id))?.id || subtabs[0].id;
+  }
   highlightTabs();
+}
+
+/** Só a Vistoria tem sub-etapas sequenciais — Quesitos/Prazos ficam sempre livres. */
+function subtabHabilitada(scope, id) {
+  if (scope !== 'vistoria') return true;
+  const ordem = ['identificacao', 'imovel', 'construcao', 'infraestrutura', 'fotos'];
+  const idx = ordem.indexOf(id);
+  if (idx <= 0) return true;
+  return !!state.vistoriaProgresso[ordem[idx - 1]];
 }
 
 function highlightTabs() {
@@ -672,6 +690,7 @@ async function salvarProcesso(btn) {
     toast(`Processo ${id} criado — agora preencha a vistoria do imóvel.`);
     state.processoAtual = id;
     state.progresso = { vistoria: false, amostras: false, resultado: false };
+    state.vistoriaProgresso = { identificacao: false, imovel: false, construcao: false, infraestrutura: false };
     setTab('vistoria');
   } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
 }
@@ -710,6 +729,7 @@ function gerarNumeroFicticio() {
 function selecionarProcesso(id) {
   state.processoAtual = id;
   state.progresso = { vistoria: true, amostras: true, resultado: true }; // edição livre — processo já existente
+  state.vistoriaProgresso = { identificacao: true, imovel: true, construcao: true, infraestrutura: true };
   setTab('vistoria');
 }
 
@@ -721,7 +741,7 @@ async function renderVistoria(main) {
       <div class="subpanel" data-subtab="identificacao">
         <div class="card"><h3>Identificação e localização</h3>
           <div class="grid">
-            <div><label>CEP</label>
+            <div style="grid-column:1/-1;max-width:260px;"><label>CEP</label>
               <div class="search-inline">
                 <input name="CEP" id="inputCep" placeholder="00000-000" inputmode="numeric">
                 <button type="button" class="combo-add-btn" title="Buscar endereço pelo CEP" onclick="buscarCep(this)">⌕</button>
@@ -741,6 +761,7 @@ async function renderVistoria(main) {
             <div><label>Valor venal (IPTU)</label><input type="number" step="0.01" name="Valor_Venal_IPTU"></div>
           </div>
         </div>
+        <div class="row-actions"><button type="button" class="primary" onclick="avancarSubtabVistoria('identificacao','imovel')">Próximo: Imóvel & Áreas →</button></div>
       </div>
 
       <div class="subpanel" data-subtab="imovel">
@@ -770,6 +791,7 @@ async function renderVistoria(main) {
             <div><label>Andares do edifício</label><input type="number" name="Andares_Edificio"></div>
           </div>
         </div>
+        <div class="row-actions"><button type="button" class="primary" onclick="avancarSubtabVistoria('imovel','construcao')">Próximo: Construção →</button></div>
       </div>
 
       <div class="subpanel" data-subtab="construcao">
@@ -797,6 +819,7 @@ async function renderVistoria(main) {
             <div><label>Segurança/Portaria</label><select name="Possui_Seguranca"><option>Não</option><option>Sim</option></select></div>
           </div>
         </div>
+        <div class="row-actions"><button type="button" class="primary" onclick="avancarSubtabVistoria('construcao','infraestrutura')">Próximo: Infraestrutura & Região →</button></div>
       </div>
 
       <div class="subpanel" data-subtab="infraestrutura">
@@ -820,6 +843,7 @@ async function renderVistoria(main) {
             <div style="grid-column:1/-1;"><label>Tendências de desenvolvimento</label><textarea name="Tendencias_Desenvolvimento_Local" rows="2"></textarea></div>
           </div>
         </div>
+        <div class="row-actions"><button type="button" class="primary" onclick="avancarSubtabVistoria('infraestrutura','fotos')">Próximo: Fotos & Observações →</button></div>
       </div>
 
       <div class="subpanel" data-subtab="fotos">
@@ -889,6 +913,31 @@ async function buscarCep(btn) {
   } finally {
     btn.disabled = false; btn.innerHTML = iconeOriginal;
   }
+}
+
+/** Confere o essencial de cada seção antes de liberar a próxima. */
+function validarSubtabVistoria_(id) {
+  const form = document.getElementById('formVistoria');
+  const val = (nome) => (form.querySelector(`[name="${nome}"]`)?.value || '').trim();
+
+  if (id === 'identificacao' && !val('Endereco_Completo')) {
+    return 'Preencha o endereço completo antes de continuar.';
+  }
+  if (id === 'imovel' && !val('Area_Privativa_m2') && !val('Area_Construida_Total_m2') && !val('Area_Terreno_m2')) {
+    return 'Informe ao menos uma área (privativa, construída ou terreno) antes de continuar.';
+  }
+  if (id === 'construcao' && !val('Estado_Conservacao_1_10')) {
+    return 'Informe o estado de conservação antes de continuar.';
+  }
+  return null;
+}
+
+function avancarSubtabVistoria(atualId, proximoId) {
+  const erro = validarSubtabVistoria_(atualId);
+  if (erro) { toast(erro, true); return; }
+  state.vistoriaProgresso[atualId] = true;
+  buildTabsL2();
+  setSubtab(proximoId);
 }
 
 async function salvarVistoria(btn) {
