@@ -59,6 +59,7 @@
     font-family:'Inter',sans-serif;font-weight:600;font-size:13.5px;color:var(--slate-500);
     border-bottom:2px solid transparent;margin-bottom:-1px;min-height:44px;
   }
+  .tab-l1:disabled,.tab-l1.disabled{opacity:.35;cursor:not-allowed;}
   .tab-l1:hover{color:var(--blue-800);}
   .tab-l1.active{color:var(--blue-600);border-bottom:2px solid var(--blue-600);}
 
@@ -235,7 +236,8 @@ const state = {
   subtab: null,
   processos: [],
   processoAtual: null,
-  amostras: []
+  amostras: [],
+  progresso: { vistoria: false, amostras: false, resultado: false }
 };
 
 /* =========================================================
@@ -480,6 +482,25 @@ function buildTabsL1() {
   const el = document.getElementById('tabsL1');
   el.innerHTML = L1_TABS.map(t => `<button class="tab-l1" data-tab="${t.id}">${t.label}</button>`).join('');
   el.querySelectorAll('.tab-l1').forEach(btn => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
+  atualizarEstadoAbas();
+}
+
+/** Define quais abas já podem ser acessadas, conforme o preenchimento sequencial. */
+function abaHabilitada(tabId) {
+  if (tabId === 'processos') return true;
+  if (!state.processoAtual) return false;
+  if (tabId === 'vistoria' || tabId === 'gestao') return true;
+  if (tabId === 'amostras') return state.progresso.vistoria;
+  if (tabId === 'resultado') return state.progresso.amostras;
+  return true;
+}
+
+function atualizarEstadoAbas() {
+  document.querySelectorAll('.tab-l1').forEach(btn => {
+    const habilitada = abaHabilitada(btn.dataset.tab);
+    btn.disabled = !habilitada;
+    btn.classList.toggle('disabled', !habilitada);
+  });
 }
 
 function buildTabsL2() {
@@ -499,13 +520,19 @@ function highlightTabs() {
 }
 
 function setTab(tab) {
-  if (tab !== 'processos' && !state.processoAtual) {
-    toast('Selecione ou crie um processo primeiro.', true);
-    tab = 'processos';
+  if (!abaHabilitada(tab)) {
+    const mensagens = {
+      vistoria: 'Crie ou selecione um processo primeiro.',
+      amostras: 'Salve a vistoria do avaliando primeiro.',
+      resultado: 'Cadastre e calcule ao menos uma amostra primeiro.'
+    };
+    toast(mensagens[tab] || 'Complete a etapa anterior primeiro.', true);
+    return;
   }
   state.tab = tab;
   state.subtab = null;
   buildTabsL2();
+  atualizarEstadoAbas();
   highlightTabs();
   render();
 }
@@ -554,9 +581,11 @@ async function renderProcessos(main) {
       <form id="formProcesso" class="grid">
         <div><label>Nº do Processo</label>
           <div class="search-inline">
-            <input name="Numero_Processo" required placeholder="0001234-56.2026.8.24.0005">
+            <input name="Numero_Processo" id="inputNumeroProcesso" required placeholder="0000000-00.0000.0.00.0000" inputmode="numeric">
             <button type="button" class="combo-add-btn" title="Buscar no Datajud" onclick="buscarDatajud(this)">⌕</button>
+            <button type="button" class="combo-add-btn" title="Gerar número fictício para teste" onclick="gerarNumeroFicticio()">🎲</button>
           </div>
+          <p style="font-size:11px;color:var(--slate-500);margin-top:4px;">Digite só os números — a formatação é automática. Use o 🎲 pra gerar um número fictício de teste.</p>
         </div>
         <div id="datajudResultado" style="grid-column:1/-1;"></div>
         <div><label>Vara / Juízo</label>
@@ -603,6 +632,7 @@ async function renderProcessos(main) {
     apiGet('listarProcessos')
   ]);
   state.processos = processos;
+  aplicarMascaraNumeroProcesso(document.getElementById('inputNumeroProcesso'));
   const lista = document.getElementById('listaProcessos');
   lista.innerHTML = processos.length ? `
     <div class="table-wrap"><table>
@@ -630,14 +660,47 @@ async function salvarProcesso(btn) {
   dados.Status_Processo = 'Aguardando vistoria';
   try {
     const id = await apiPost('salvarProcesso', dados);
-    toast(`Processo ${id} criado.`);
+    toast(`Processo ${id} criado — agora preencha a vistoria do imóvel.`);
     state.processoAtual = id;
-    await render();
+    state.progresso = { vistoria: false, amostras: false, resultado: false };
+    setTab('vistoria');
   } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
+}
+
+/** Formata o número do processo no padrão CNJ enquanto o perito digita. */
+function formatarNumeroProcesso_(digitos) {
+  let resultado = digitos.slice(0, 7);
+  if (digitos.length > 7) resultado += '-' + digitos.slice(7, 9);
+  if (digitos.length > 9) resultado += '.' + digitos.slice(9, 13);
+  if (digitos.length > 13) resultado += '.' + digitos.slice(13, 14);
+  if (digitos.length > 14) resultado += '.' + digitos.slice(14, 16);
+  if (digitos.length > 16) resultado += '.' + digitos.slice(16, 20);
+  return resultado;
+}
+
+function aplicarMascaraNumeroProcesso(input) {
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const digitos = input.value.replace(/\D/g, '').slice(0, 20);
+    input.value = formatarNumeroProcesso_(digitos);
+  });
+}
+
+/** Gera um número de processo fictício, só pra testar o cadastro — não existe de verdade no Datajud. */
+function gerarNumeroFicticio() {
+  const seq = String(Math.floor(Math.random() * 9999999)).padStart(7, '0');
+  const dv = String(Math.floor(Math.random() * 99)).padStart(2, '0');
+  const ano = new Date().getFullYear();
+  const oj = String(Math.floor(Math.random() * 9999)).padStart(4, '0');
+  const numero = `${seq}-${dv}.${ano}.8.24.${oj}`; // .8.24. = Justiça Estadual, TJSC (só formato, fictício)
+  const input = document.getElementById('inputNumeroProcesso');
+  if (input) input.value = numero;
+  toast('Número fictício gerado — use só para testes, ele não existe no Datajud de verdade.');
 }
 
 function selecionarProcesso(id) {
   state.processoAtual = id;
+  state.progresso = { vistoria: true, amostras: true, resultado: true }; // edição livre — processo já existente
   setTab('vistoria');
 }
 
@@ -713,7 +776,8 @@ async function salvarVistoria(btn) {
   dados.ID_Processo_FK = state.processoAtual;
   try {
     const id = await apiPost('salvarVistoria', dados);
-    toast(`Vistoria ${id} salva.`);
+    toast(`Vistoria ${id} salva — agora cadastre as amostras de mercado.`);
+    state.progresso.vistoria = true;
     setTab('amostras');
   } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
 }
@@ -802,6 +866,8 @@ async function salvarAmostra(btn) {
   try {
     await apiPost('salvarAmostra', dados);
     toast('Amostra adicionada.');
+    state.progresso.amostras = true;
+    atualizarEstadoAbas();
     form.reset();
     await carregarAmostras();
   } catch (err) { toast(err.message, true); }
@@ -887,10 +953,11 @@ async function calcularResultado(btn) {
           <div class="stat"><div class="n">${r.grauNBR}</div><div class="l">Grau (CV ${r.cv}%)</div></div>
         </div>
       </div>`;
+    state.progresso.resultado = true;
+    atualizarEstadoAbas();
   } catch (err) { toast(err.message, true); }
   finally { definirCarregando(btn, false); }
 }
-
 /* ---- Gestão (com subabas Quesitos/Prazos) ---- */
 async function renderGestao(main) {
   main.innerHTML = `
