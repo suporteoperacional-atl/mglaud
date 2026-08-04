@@ -277,6 +277,64 @@ async function adicionarItemCombo(container) {
 }
 
 /* =========================================================
+   Consulta ao Datajud (CNJ) — preenche Vara/Tipo de Ação
+   automaticamente a partir do número do processo.
+   ========================================================= */
+async function buscarDatajud(btn) {
+  const form = document.getElementById('formProcesso');
+  const numero = form.querySelector('[name="Numero_Processo"]').value.trim();
+  const box = document.getElementById('datajudResultado');
+  if (!numero) { toast('Digite o número do processo primeiro.', true); return; }
+
+  if (btn.dataset.busy === '1') return;
+  btn.dataset.busy = '1'; btn.disabled = true; const textoOriginal = btn.textContent; btn.textContent = '…';
+
+  try {
+    const r = await apiGet('consultarDatajud', { numeroProcesso: numero });
+    if (!r.encontrado) {
+      box.innerHTML = `<div class="empty">Processo não localizado no Datajud (${r.tribunal || '—'}). Preencha manualmente.</div>`;
+      return;
+    }
+
+    // Preenche Vara/Juízo (combo) — adiciona a opção se ainda não existir
+    const comboVara = form.querySelector('[data-categoria="Vara_Juizo"]');
+    if (comboVara && r.orgaoJulgador) {
+      const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Vara_Juizo', Valor: r.orgaoJulgador });
+      await popularCombo(comboVara, valorSalvo);
+    }
+    // Preenche Tipo de Ação (combo)
+    const comboTipo = form.querySelector('[data-categoria="Tipo_Acao"]');
+    if (comboTipo && r.classe) {
+      const valorSalvo = await apiPost('adicionarOpcao', { Categoria: 'Tipo_Acao', Valor: r.classe });
+      await popularCombo(comboTipo, valorSalvo);
+    }
+    // Data de distribuição (campo oculto, sem edição manual)
+    if (r.dataAjuizamento) {
+      const campoData = form.querySelector('[name="Data_Distribuicao"]');
+      if (campoData) campoData.value = r.dataAjuizamento.slice(0, 10);
+    }
+
+    const movimentosHtml = (r.movimentosRecentes || []).map(m =>
+      `<li>${m.data ? m.data.slice(0, 10) : '—'} — ${m.nome}</li>`
+    ).join('');
+
+    box.innerHTML = `
+      <div class="card" style="background:var(--blue-50);">
+        <h3>Encontrado no Datajud — ${r.tribunal}</h3>
+        <p style="font-size:12.5px;color:var(--slate-500);margin-bottom:8px;">
+          ${r.classe || '—'} · ${r.orgaoJulgador || '—'} · ajuizado em ${r.dataAjuizamento ? r.dataAjuizamento.slice(0,10) : '—'}
+        </p>
+        ${movimentosHtml ? `<ul style="font-size:12px;color:var(--slate-500);padding-left:18px;margin:0;">${movimentosHtml}</ul>` : ''}
+      </div>`;
+    toast('Dados importados do Datajud — revise antes de salvar.');
+  } catch (err) {
+    box.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = textoOriginal; btn.dataset.busy = '0';
+  }
+}
+
+/* =========================================================
    Navegação em cascata (nível 1 -> nível 2)
    ========================================================= */
 function buildTabsL1() {
@@ -355,7 +413,13 @@ async function renderProcessos(main) {
     <div class="card">
       <h3>Novo processo</h3>
       <form id="formProcesso" class="grid">
-        <div><label>Nº do Processo</label><input name="Numero_Processo" required></div>
+        <div><label>Nº do Processo</label>
+          <div class="combo-add">
+            <input name="Numero_Processo" required placeholder="0001234-56.2026.8.24.0005">
+            <button type="button" class="combo-add-btn" title="Buscar no Datajud" onclick="buscarDatajud(this)">⌕</button>
+          </div>
+        </div>
+        <div id="datajudResultado" style="grid-column:1/-1;"></div>
         <div><label>Vara / Juízo</label>
           <div class="combo-add" data-categoria="Vara_Juizo">
             <select name="Vara_Juizo" required></select>
@@ -389,6 +453,7 @@ async function renderProcessos(main) {
           </div>
         </div>
         <div><label>Prazo de Entrega do Laudo</label><input type="date" name="Prazo_Entrega_Laudo"></div>
+        <input type="hidden" name="Data_Distribuicao">
       </form>
       <div class="row-actions"><button class="primary" onclick="salvarProcesso()">Salvar processo</button></div>
     </div>
@@ -544,6 +609,16 @@ async function renderAmostras(main) {
     <div class="card">
       <h3>Amostras do processo <span id="contadorAmostras" style="font-weight:400;color:var(--slate-500);font-size:12px;"></span></h3>
       <div id="listaAmostras">Carregando…</div>
+      <div class="grid" style="margin-top:14px;max-width:280px;">
+        <div><label>Índice de correção monetária</label>
+          <select id="indiceCorrecao">
+            <option value="IGP-M">IGP-M</option>
+            <option value="IPCA">IPCA</option>
+            <option value="INCC-DI">INCC-DI</option>
+            <option value="">Sem correção</option>
+          </select>
+        </div>
+      </div>
       <div class="row-actions"><button class="ghost" onclick="rodarHomogeneizacao(this)">Calcular homogeneização</button></div>
       <div id="statsHomog"></div>
     </div>
@@ -588,7 +663,10 @@ async function salvarAmostra(btn) {
 async function rodarHomogeneizacao(btn) {
   if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = 'Calculando…'; }
   try {
-    const resultado = await apiGet('calcularHomogeneizacao', { idProcesso: state.processoAtual });
+    const resultado = await apiGet('calcularHomogeneizacao', {
+      idProcesso: state.processoAtual,
+      indiceCorrecao: document.getElementById('indiceCorrecao')?.value || ''
+    });
     await carregarAmostras();
     const s = resultado.estatisticas;
     const box = document.getElementById('statsHomog');
@@ -599,7 +677,10 @@ async function rodarHomogeneizacao(btn) {
           <div class="stat"><div class="n">R$ ${s.media.toLocaleString('pt-BR')}</div><div class="l">Média R$/m²</div></div>
           <div class="stat"><div class="n">R$ ${s.mediana.toLocaleString('pt-BR')}</div><div class="l">Mediana R$/m²</div></div>
           <div class="stat"><div class="n">${s.cv}%</div><div class="l">CV — ${s.grauNBR}</div></div>
-        </div>`;
+        </div>
+        <p style="font-size:11px;color:var(--slate-500);margin-top:10px;">
+          Correção monetária: ${resultado.indiceCorrecao} · Data de referência: ${resultado.dataReferencia}
+        </p>`;
     }
     toast('Homogeneização calculada.');
   } catch (err) { toast(err.message, true); }
