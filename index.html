@@ -223,7 +223,8 @@ const L1_TABS = [
   { id: 'vistoria',  label: 'Vistoria' },
   { id: 'amostras',  label: 'Amostras' },
   { id: 'resultado', label: 'Resultado' },
-  { id: 'gestao',    label: 'Quesitos & Prazos' }
+  { id: 'gestao',    label: 'Quesitos & Prazos' },
+  { id: 'resumo',    label: 'Resumo' }
 ];
 
 const L2_TABS = {
@@ -300,9 +301,14 @@ function definirCarregando(btn, carregando, textoCarregando) {
    Combos expansíveis (select + botão "+")
    Cada categoria é lida/gravada na aba 10_Config_Listas.
    ========================================================= */
-async function inicializarCombos(escopo) {
+async function inicializarCombos(escopo, valoresIniciais) {
   const combos = escopo.querySelectorAll('.combo-add');
-  await Promise.all(Array.from(combos).map(c => popularCombo(c)));
+  await Promise.all(Array.from(combos).map(c => {
+    const select = c.querySelector('select');
+    const nome = select ? select.name : null;
+    const valorInicial = valoresIniciais && nome ? valoresIniciais[nome] : undefined;
+    return popularCombo(c, valorInicial);
+  }));
   combos.forEach(c => {
     const btn = c.querySelector('.combo-add-btn');
     btn.onclick = () => adicionarItemCombo(c);
@@ -503,7 +509,7 @@ function buildTabsL1() {
 function abaHabilitada(tabId) {
   if (tabId === 'processos') return true;
   if (!state.processoAtual) return false;
-  if (tabId === 'vistoria' || tabId === 'gestao' || tabId === 'amostras') return true;
+  if (tabId === 'vistoria' || tabId === 'gestao' || tabId === 'amostras' || tabId === 'resumo') return true;
   if (tabId === 'resultado') return state.progresso.vistoria && state.progresso.amostras;
   return true;
 }
@@ -595,6 +601,7 @@ async function render() {
     else if (state.tab === 'amostras') await renderAmostras(main);
     else if (state.tab === 'resultado') await renderResultado(main);
     else if (state.tab === 'gestao') await renderGestao(main);
+    else if (state.tab === 'resumo') await renderResumo(main);
   } catch (err) {
     main.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
   }
@@ -692,6 +699,7 @@ async function salvarProcesso(btn) {
     state.processoAtual = id;
     state.progresso = { vistoria: false, amostras: false, resultado: false };
     state.vistoriaProgresso = { identificacao: false, imovel: false, construcao: false, infraestrutura: false };
+    state.vistoriaAtualId = null;
     setTab('vistoria');
   } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
 }
@@ -859,7 +867,26 @@ async function renderVistoria(main) {
     <div class="row-actions"><button class="primary" onclick="salvarVistoria(this)">Salvar vistoria completa</button></div>
   `;
   document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === state.subtab));
-  await inicializarCombos(document.getElementById('formVistoria'));
+
+  const form = document.getElementById('formVistoria');
+  let vistoriaExistente = null;
+  try {
+    vistoriaExistente = await apiGet('getVistoria', { idProcesso: state.processoAtual });
+  } catch (err) { /* sem vistoria ainda — segue com formulário em branco */ }
+
+  state.vistoriaAtualId = vistoriaExistente && vistoriaExistente.ID_Vistoria ? vistoriaExistente.ID_Vistoria : null;
+
+  if (vistoriaExistente) {
+    Object.keys(vistoriaExistente).forEach(chave => {
+      if (chave.startsWith('_') || chave === 'ID_Vistoria' || chave === 'ID_Processo_FK') return;
+      const campo = form.querySelector(`[name="${chave}"]`);
+      if (!campo || campo.closest('.combo-add')) return; // combo tratado abaixo, via inicializarCombos
+      campo.value = vistoriaExistente[chave] ?? '';
+    });
+    toast('Vistoria existente carregada para edição.');
+  }
+
+  await inicializarCombos(form, vistoriaExistente || {});
   aplicarMascaraCep(document.getElementById('inputCep'));
 }
 
@@ -946,8 +973,16 @@ async function salvarVistoria(btn) {
   const dados = Object.fromEntries(new FormData(document.getElementById('formVistoria')).entries());
   dados.ID_Processo_FK = state.processoAtual;
   try {
-    const id = await apiPost('salvarVistoria', dados);
-    toast(`Vistoria ${id} salva — agora cadastre as amostras de mercado.`);
+    let id;
+    if (state.vistoriaAtualId) {
+      dados.ID_Vistoria = state.vistoriaAtualId;
+      id = await apiPost('atualizarVistoria', dados);
+      toast(`Vistoria ${id} atualizada.`);
+    } else {
+      id = await apiPost('salvarVistoria', dados);
+      state.vistoriaAtualId = id;
+      toast(`Vistoria ${id} salva — agora cadastre as amostras de mercado.`);
+    }
     state.progresso.vistoria = true;
     setTab('amostras');
   } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
@@ -1220,6 +1255,64 @@ async function salvarPrazo(btn) {
   try { await apiPost('salvarPrazo', dados); toast('Prazo adicionado.'); form.reset(); await carregarPrazos(); }
   catch (err) { toast(err.message, true); }
   finally { definirCarregando(btn, false); }
+}
+
+/* ---- Resumo ---- */
+async function renderResumo(main) {
+  main.innerHTML = `
+    <div class="page-title"><h2>Resumo do Processo</h2><p>Visão consolidada de tudo já cadastrado — clique em "Editar" pra corrigir qualquer dado.</p></div>
+    <div id="resumoConteudo"><div class="loading-inline"><span class="spinner-blue"></span>Carregando…</div></div>
+  `;
+  const box = document.getElementById('resumoConteudo');
+  try {
+    const [processo, vistoria, amostras] = await Promise.all([
+      apiGet('getProcesso', { id: state.processoAtual }),
+      apiGet('getVistoria', { idProcesso: state.processoAtual }).catch(() => null),
+      apiGet('listarAmostras', { idProcesso: state.processoAtual })
+    ]);
+
+    let homog = null;
+    if (amostras.length) {
+      try {
+        homog = await apiGet('calcularHomogeneizacao', { idProcesso: state.processoAtual, indiceCorrecao: '' });
+      } catch (err) { /* segue sem estatísticas se o cálculo falhar (ex.: vistoria incompleta) */ }
+    }
+
+    box.innerHTML = `
+      <div class="card">
+        <h3>Processo <button type="button" class="ghost" style="float:right;padding:4px 12px;font-size:12px;" onclick="setTab('processos')">Editar</button></h3>
+        <p style="font-size:13px;color:var(--slate-500);line-height:1.6;">
+          ${processo.Numero_Processo || '—'} · ${processo.Vara_Juizo || '—'} · ${processo.Comarca || '—'}<br>
+          ${processo.Requerente || '—'} × ${processo.Requerido || '—'}<br>
+          Status: ${badgeStatus(processo.Status_Processo)}
+        </p>
+      </div>
+      <div class="card">
+        <h3>Imóvel avaliando <button type="button" class="ghost" style="float:right;padding:4px 12px;font-size:12px;" onclick="setTab('vistoria')">Editar</button></h3>
+        ${vistoria ? `
+          <p style="font-size:13px;color:var(--slate-500);line-height:1.6;">
+            ${vistoria.Endereco_Completo || '—'}, ${vistoria.Bairro || '—'} — ${vistoria.Cidade_UF || '—'}<br>
+            ${vistoria.Tipo_Imovel || '—'} · ${vistoria.Padrao_Construtivo || '—'} · ${vistoria.Area_Privativa_m2 || '—'} m² privativos<br>
+            ${vistoria.Dormitorios || '—'} dorm. · ${vistoria.Banheiros || '—'} banh. · Conservação ${vistoria.Estado_Conservacao_1_10 || '—'}/10
+          </p>` : `<div class="empty">Vistoria ainda não cadastrada.</div>`}
+      </div>
+      <div class="card">
+        <h3>Amostras de mercado <button type="button" class="ghost" style="float:right;padding:4px 12px;font-size:12px;" onclick="setTab('amostras')">Editar</button></h3>
+        ${homog ? `
+          <div class="stat-grid">
+            <div class="stat"><div class="n">${homog.estatisticas.n}</div><div class="l">Amostras</div></div>
+            <div class="stat"><div class="n">R$ ${homog.estatisticas.media.toLocaleString('pt-BR')}</div><div class="l">Média R$/m²</div></div>
+            <div class="stat"><div class="n">${homog.estatisticas.cv}%</div><div class="l">CV — ${homog.estatisticas.grauNBR}</div></div>
+          </div>` : `<div class="empty">Nenhuma amostra cadastrada ainda.</div>`}
+      </div>
+      <div class="card">
+        <h3>Resultado final <button type="button" class="ghost" style="float:right;padding:4px 12px;font-size:12px;" onclick="setTab('resultado')">Ir para Resultado</button></h3>
+        <p style="font-size:12.5px;color:var(--slate-500);">O valor de mercado final depende da área de cálculo e dos ajustes (depreciação/liquidez) definidos na aba Resultado — acesse-a pra gerar ou revisar.</p>
+      </div>
+    `;
+  } catch (err) {
+    box.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
+  }
 }
 
 /* =========================================================
