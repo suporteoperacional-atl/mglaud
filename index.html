@@ -1087,8 +1087,33 @@ async function renderResultado(main) {
     </div>
     <div id="resultadoFinal"></div>
     <div id="tendenciaMercado"></div>
+    <div id="referenciaFipeZap"></div>
   `;
   carregarTendenciaMercado();
+  carregarFipeZap();
+}
+
+async function carregarFipeZap() {
+  const box = document.getElementById('referenciaFipeZap');
+  try {
+    const f = await apiGet('consultarFipeZap', { idProcesso: state.processoAtual });
+    if (!f.disponivel) {
+      box.innerHTML = `<div class="card"><h3 style="font-size:13px;">Referência FipeZAP</h3><p style="font-size:12px;color:var(--slate-500);">${f.motivo}</p></div>`;
+      return;
+    }
+    const sinal = (v) => v > 0 ? '+' : '';
+    box.innerHTML = `
+      <div class="card" style="background:var(--blue-50);">
+        <h3 style="font-size:13px;">Referência FipeZAP — ${f.cidade} (${f.quartos})</h3>
+        <p style="font-size:12.5px;color:var(--slate-500);">
+          Preço médio de venda: <strong style="color:var(--blue-950);">R$ ${f.precoMedioM2.toLocaleString('pt-BR')}/m²</strong>
+          referente a ${f.dataReferencia}
+          ${f.var12mPct !== null ? ` · ${sinal(f.var12mPct)}${f.var12mPct}% em 12 meses` : ''}
+        </p>
+      </div>`;
+  } catch (err) {
+    box.innerHTML = '';
+  }
 }
 
 async function carregarTendenciaMercado() {
