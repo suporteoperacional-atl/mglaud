@@ -864,7 +864,10 @@ async function renderVistoria(main) {
         </div>
       </div>
     </form>
-    <div class="row-actions"><button class="primary" onclick="salvarVistoria(this)">Salvar vistoria completa</button></div>
+    <div class="row-actions">
+      <button class="primary" onclick="salvarVistoria(this)">Salvar vistoria completa</button>
+      <button class="ghost" id="btnExcluirVistoria" style="display:none;color:var(--red);border-color:#F3D5D0;" onclick="excluirVistoria(this)">Excluir vistoria</button>
+    </div>
   `;
   document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.subtab === state.subtab));
 
@@ -875,6 +878,9 @@ async function renderVistoria(main) {
   } catch (err) { /* sem vistoria ainda — segue com formulário em branco */ }
 
   state.vistoriaAtualId = vistoriaExistente && vistoriaExistente.ID_Vistoria ? vistoriaExistente.ID_Vistoria : null;
+
+  const btnExcluir = document.getElementById('btnExcluirVistoria');
+  if (btnExcluir && state.vistoriaAtualId) btnExcluir.style.display = 'inline-flex';
 
   if (vistoriaExistente) {
     Object.keys(vistoriaExistente).forEach(chave => {
@@ -968,6 +974,19 @@ function avancarSubtabVistoria(atualId, proximoId) {
   setSubtab(proximoId);
 }
 
+async function excluirVistoria(btn) {
+  if (!state.vistoriaAtualId) return;
+  if (!confirm(`Excluir a vistoria ${state.vistoriaAtualId}?\n\nEla sai do processo e dos cálculos, mas continua registrada na planilha (pode ser recuperada se necessário). As amostras não são afetadas.`)) return;
+  definirCarregando(btn, true, 'Excluindo…');
+  try {
+    await apiPost('excluirVistoria', { ID_Vistoria: state.vistoriaAtualId });
+    toast(`Vistoria ${state.vistoriaAtualId} excluída.`);
+    state.vistoriaAtualId = null;
+    state.progresso.vistoria = false;
+    await render();
+  } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
+}
+
 async function salvarVistoria(btn) {
   definirCarregando(btn, true, 'Salvando…');
   const dados = Object.fromEntries(new FormData(document.getElementById('formVistoria')).entries());
@@ -1022,7 +1041,8 @@ async function renderAmostras(main) {
         <div><label>Fator fonte</label><input type="number" step="0.01" name="Fator_Fonte" placeholder="0.90 se oferta"></div>
         <div><label>Incluir no histórico?</label><select name="Incluir_no_Historico"><option>Sim</option><option>Não</option></select></div>
       </form>
-      <div class="row-actions"><button class="primary" onclick="salvarAmostra(this)">Adicionar amostra</button></div>
+      <div class="row-actions"><button class="primary" id="btnSalvarAmostra" onclick="salvarAmostra(this)">Adicionar amostra</button></div>
+      <div id="avisoEdicaoAmostra"></div>
     </div>
     <div class="card">
       <h3>Amostras do processo <span id="contadorAmostras" style="font-weight:400;color:var(--slate-500);font-size:12px;"></span></h3>
@@ -1054,13 +1074,59 @@ async function carregarAmostras() {
   if (!lista) return; // a tela mudou antes da resposta chegar — nada a fazer
   lista.innerHTML = amostras.length ? `
     <div class="table-wrap"><table>
-      <thead><tr><th>ID</th><th>Bairro</th><th>Área</th><th>Valor</th><th>Fator Total</th><th>Vlr. Unit. Homog.</th></tr></thead>
+      <thead><tr><th>ID</th><th>Bairro</th><th>Área</th><th>Valor</th><th>Fator Total</th><th>Vlr. Unit. Homog.</th><th></th></tr></thead>
       <tbody>${amostras.map(a => `
         <tr><td>${a.ID_Amostra}</td><td>${a.Bairro || '—'}</td><td>${a.Area_m2 || '—'} m²</td>
         <td>R$ ${Number(a['Valor_Anunciado_R$'] || 0).toLocaleString('pt-BR')}</td>
         <td>${a.Fator_Total || '—'}</td>
-        <td>${a['Valor_Unit_Homogeneizado_R$m2'] ? 'R$ ' + Number(a['Valor_Unit_Homogeneizado_R$m2']).toLocaleString('pt-BR') : '—'}</td></tr>`).join('')}</tbody>
+        <td>${a['Valor_Unit_Homogeneizado_R$m2'] ? 'R$ ' + Number(a['Valor_Unit_Homogeneizado_R$m2']).toLocaleString('pt-BR') : '—'}</td>
+        <td style="white-space:nowrap;">
+          <button class="ghost" style="padding:4px 10px;font-size:11.5px;" onclick="editarAmostra('${a.ID_Amostra}')">Editar</button>
+          <button class="ghost" style="padding:4px 10px;font-size:11.5px;color:var(--red);border-color:#F3D5D0;" onclick="excluirAmostra('${a.ID_Amostra}', this)">Excluir</button>
+        </td></tr>`).join('')}</tbody>
     </table></div>` : `<div class="empty">Nenhuma amostra cadastrada ainda.</div>`;
+}
+
+/** Carrega uma amostra existente no formulário para edição. */
+function editarAmostra(idAmostra) {
+  const amostra = state.amostras.find(a => a.ID_Amostra === idAmostra);
+  if (!amostra) { toast('Amostra não encontrada.', true); return; }
+  const form = document.getElementById('formAmostra');
+
+  Object.keys(amostra).forEach(chave => {
+    if (chave.startsWith('_') || chave === 'ID_Amostra' || chave === 'ID_Processo_FK') return;
+    const campo = form.querySelector(`[name="${chave}"]`);
+    if (!campo) return;
+    if (campo.tagName === 'SELECT' && !Array.from(campo.options).some(o => o.value === String(amostra[chave]))) return;
+    campo.value = amostra[chave] ?? '';
+  });
+
+  state.amostraEditandoId = idAmostra;
+  const btn = document.getElementById('btnSalvarAmostra');
+  if (btn) { btn.textContent = 'Salvar alterações'; btn.dataset.textoOriginal = 'Salvar alterações'; }
+  const aviso = document.getElementById('avisoEdicaoAmostra');
+  if (aviso) aviso.innerHTML = `<p style="font-size:12px;color:var(--amber);margin-top:8px;">Editando ${idAmostra} — <a href="#" onclick="cancelarEdicaoAmostra();return false;" style="color:var(--blue-600);">cancelar e voltar a criar nova</a></p>`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelarEdicaoAmostra() {
+  state.amostraEditandoId = null;
+  document.getElementById('formAmostra').reset();
+  const btn = document.getElementById('btnSalvarAmostra');
+  if (btn) { btn.textContent = 'Adicionar amostra'; btn.dataset.textoOriginal = 'Adicionar amostra'; }
+  const aviso = document.getElementById('avisoEdicaoAmostra');
+  if (aviso) aviso.innerHTML = '';
+}
+
+async function excluirAmostra(idAmostra, btn) {
+  if (!confirm(`Excluir a amostra ${idAmostra}?\n\nEla sai das listas e dos cálculos, mas continua registrada na planilha (pode ser recuperada se necessário).`)) return;
+  definirCarregando(btn, true, '…');
+  try {
+    await apiPost('excluirAmostra', { ID_Amostra: idAmostra });
+    toast(`Amostra ${idAmostra} excluída.`);
+    if (state.amostraEditandoId === idAmostra) cancelarEdicaoAmostra();
+    await carregarAmostras();
+  } catch (err) { toast(err.message, true); definirCarregando(btn, false); }
 }
 
 async function salvarAmostra(btn) {
@@ -1070,11 +1136,18 @@ async function salvarAmostra(btn) {
   dados.ID_Processo_FK = state.processoAtual;
   dados['Valor_Ajustado_R$'] = (Number(dados['Valor_Anunciado_R$']) || 0) * (Number(dados.Fator_Fonte) || 0.9);
   try {
-    await apiPost('salvarAmostra', dados);
-    toast('Amostra adicionada.');
+    if (state.amostraEditandoId) {
+      dados.ID_Amostra = state.amostraEditandoId;
+      await apiPost('atualizarAmostra', dados);
+      toast(`Amostra ${state.amostraEditandoId} atualizada.`);
+      cancelarEdicaoAmostra();
+    } else {
+      await apiPost('salvarAmostra', dados);
+      toast('Amostra adicionada.');
+      form.reset();
+    }
     state.progresso.amostras = true;
     atualizarEstadoAbas();
-    form.reset();
     await carregarAmostras();
   } catch (err) { toast(err.message, true); }
   finally { if (btn) { definirCarregando(btn, false); btn.dataset.busy = '0'; } }
@@ -1274,8 +1347,8 @@ async function renderResumo(main) {
     let homog = null;
     if (amostras.length) {
       try {
-        homog = await apiGet('calcularHomogeneizacao', { idProcesso: state.processoAtual, indiceCorrecao: '' });
-      } catch (err) { /* segue sem estatísticas se o cálculo falhar (ex.: vistoria incompleta) */ }
+        homog = await apiGet('estatisticasResumo', { idProcesso: state.processoAtual });
+      } catch (err) { /* segue sem estatísticas se ainda não houver cálculo gravado */ }
     }
 
     box.innerHTML = `
@@ -1298,12 +1371,14 @@ async function renderResumo(main) {
       </div>
       <div class="card">
         <h3>Amostras de mercado <button type="button" class="ghost" style="float:right;padding:4px 12px;font-size:12px;" onclick="setTab('amostras')">Editar</button></h3>
-        ${homog ? `
+        ${homog && homog.estatisticas.n ? `
           <div class="stat-grid">
-            <div class="stat"><div class="n">${homog.estatisticas.n}</div><div class="l">Amostras</div></div>
+            <div class="stat"><div class="n">${homog.nAmostras}</div><div class="l">Amostras</div></div>
             <div class="stat"><div class="n">R$ ${homog.estatisticas.media.toLocaleString('pt-BR')}</div><div class="l">Média R$/m²</div></div>
             <div class="stat"><div class="n">${homog.estatisticas.cv}%</div><div class="l">CV — ${homog.estatisticas.grauNBR}</div></div>
-          </div>` : `<div class="empty">Nenhuma amostra cadastrada ainda.</div>`}
+          </div>` : (amostras.length
+            ? `<p style="font-size:12.5px;color:var(--slate-500);">${amostras.length} amostra(s) cadastrada(s), mas a homogeneização ainda não foi calculada — rode o cálculo na aba Amostras.</p>`
+            : `<div class="empty">Nenhuma amostra cadastrada ainda.</div>`)}
       </div>
       <div class="card">
         <h3>Resultado final <button type="button" class="ghost" style="float:right;padding:4px 12px;font-size:12px;" onclick="setTab('resultado')">Ir para Resultado</button></h3>
