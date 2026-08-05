@@ -223,6 +223,7 @@ const L1_TABS = [
   { id: 'vistoria',  label: 'Vistoria' },
   { id: 'amostras',  label: 'Amostras' },
   { id: 'resultado', label: 'Resultado' },
+  { id: 'inferencia', label: 'Inferência' },
   { id: 'gestao',    label: 'Quesitos & Prazos' },
   { id: 'resumo',    label: 'Resumo' }
 ];
@@ -510,7 +511,7 @@ function abaHabilitada(tabId) {
   if (tabId === 'processos') return true;
   if (!state.processoAtual) return false;
   if (tabId === 'vistoria' || tabId === 'gestao' || tabId === 'amostras' || tabId === 'resumo') return true;
-  if (tabId === 'resultado') return state.progresso.vistoria && state.progresso.amostras;
+  if (tabId === 'resultado' || tabId === 'inferencia') return state.progresso.vistoria && state.progresso.amostras;
   return true;
 }
 
@@ -558,7 +559,8 @@ function setTab(tab) {
   if (!abaHabilitada(tab)) {
     const mensagens = {
       vistoria: 'Crie ou selecione um processo primeiro.',
-      resultado: 'Salve a vistoria do avaliando e cadastre ao menos uma amostra primeiro.'
+      resultado: 'Salve a vistoria do avaliando e cadastre ao menos uma amostra primeiro.',
+      inferencia: 'Salve a vistoria do avaliando e cadastre as amostras primeiro.'
     };
     toast(mensagens[tab] || 'Complete a etapa anterior primeiro.', true);
     return;
@@ -602,6 +604,7 @@ async function render() {
     else if (state.tab === 'resultado') await renderResultado(main);
     else if (state.tab === 'gestao') await renderGestao(main);
     else if (state.tab === 'resumo') await renderResumo(main);
+    else if (state.tab === 'inferencia') await renderInferencia(main);
   } catch (err) {
     main.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
   }
@@ -1045,6 +1048,20 @@ async function renderAmostras(main) {
       <div id="avisoEdicaoAmostra"></div>
     </div>
     <div class="card">
+      <h3>Importar amostras em lote</h3>
+      <p style="font-size:12px;color:var(--slate-500);margin-bottom:10px;line-height:1.6;">
+        Cole abaixo as linhas copiadas de uma planilha (Excel/Sheets), <strong>sem cabeçalho</strong>, nesta ordem exata:<br>
+        <code style="font-size:11px;color:var(--blue-800);">Fonte · Endereço · Bairro · Tipo · Área · Padrão · Conservação · Andar · Vagas · Dormitórios · Classif.Bairro · Data · Tipo de dado · Valor</code>
+      </p>
+      <textarea id="colarAmostras" rows="5" placeholder="OLX	Rua X, 100	Centro	Apartamento	95	Normal (H2)	8	5	1	3	nobre	2026-07-15	Oferta	780000"></textarea>
+      <div class="row-actions">
+        <button class="ghost" onclick="previewImportacao()">Conferir antes de importar</button>
+        <button class="primary" id="btnImportar" style="display:none;" onclick="confirmarImportacao(this)">Importar</button>
+      </div>
+      <div id="previewImportacao"></div>
+    </div>
+
+    <div class="card">
       <h3>Amostras do processo <span id="contadorAmostras" style="font-weight:400;color:var(--slate-500);font-size:12px;"></span></h3>
       <div id="listaAmostras"><div class="loading-inline"><span class="spinner-blue"></span>Carregando…</div></div>
       <div class="grid" style="margin-top:14px;max-width:280px;">
@@ -1183,12 +1200,30 @@ async function rodarHomogeneizacao(btn) {
 /* ---- Resultado ---- */
 async function renderResultado(main) {
   main.innerHTML = `
-    <div class="page-title"><h2>Resultado da Avaliação</h2><p>Valor de mercado final com depreciação, liquidez e intervalo de confiança.</p></div>
+    <div class="page-title"><h2>Resultado da Avaliação</h2><p>Depreciação da edificação, valor de mercado final e intervalo de confiança.</p></div>
+
+    <div class="card">
+      <h3>Depreciação da edificação — Ross-Heidecke</h3>
+      <p style="font-size:12px;color:var(--slate-500);margin-bottom:12px;">Usa idade, estrutura e conservação já cadastrados na Vistoria. Ajuste os parâmetros se necessário.</p>
+      <div class="grid">
+        <div><label>Vida útil referencial (anos)</label><input type="number" id="depVidaUtil" placeholder="automático pela estrutura"></div>
+        <div><label>Estado de conservação (Heidecke)</label>
+          <select id="depClasseHeidecke"><option value="">Sugerir pela vistoria</option></select>
+        </div>
+        <div><label>Valor residual (%)</label><input type="number" id="depResiduo" value="20" step="1"></div>
+        <div><label>Idade a considerar</label>
+          <select id="depTipoIdade"><option value="false">Idade real</option><option value="true">Idade aparente</option></select>
+        </div>
+      </div>
+      <div class="row-actions"><button class="ghost" onclick="calcularDepreciacao(this)">Calcular depreciação</button></div>
+      <div id="resultadoDepreciacao"></div>
+    </div>
+
     <div class="card">
       <h3>Parâmetros finais</h3>
       <form id="formResultado" class="grid">
         <div><label>Área de cálculo (m²)</label><input type="number" step="0.01" name="areaCalculo" required></div>
-        <div><label>Depreciação (%)</label><input type="number" step="0.1" name="depreciacao" value="0"></div>
+        <div><label>Depreciação (%)</label><input type="number" step="0.01" name="depreciacao" value="0"></div>
         <div><label>Ajuste de liquidez (%)</label><input type="number" step="0.1" name="liquidez" value="0"></div>
       </form>
       <div class="row-actions"><button class="primary" onclick="calcularResultado(this)">Gerar resultado</button></div>
@@ -1197,8 +1232,54 @@ async function renderResultado(main) {
     <div id="tendenciaMercado"></div>
     <div id="referenciaFipeZap"></div>
   `;
+  carregarTabelaHeidecke();
   carregarTendenciaMercado();
   carregarFipeZap();
+}
+
+async function carregarTabelaHeidecke() {
+  const select = document.getElementById('depClasseHeidecke');
+  if (!select) return;
+  try {
+    const tabela = await apiGet('tabelaHeidecke');
+    select.innerHTML = `<option value="">Sugerir pela vistoria</option>` +
+      tabela.map(h => `<option value="${h.classe}">${h.classe} — ${h.descricao} (${h.coefPct}%)</option>`).join('');
+  } catch (err) { /* mantém só a opção automática se a lista falhar */ }
+}
+
+async function calcularDepreciacao(btn) {
+  definirCarregando(btn, true, 'Calculando…');
+  const box = document.getElementById('resultadoDepreciacao');
+  try {
+    const d = await apiGet('calcularDepreciacao', {
+      idProcesso: state.processoAtual,
+      vidaUtil: document.getElementById('depVidaUtil').value || '',
+      classeHeidecke: document.getElementById('depClasseHeidecke').value || '',
+      residuoPct: document.getElementById('depResiduo').value || '',
+      usarIdadeAparente: document.getElementById('depTipoIdade').value
+    });
+
+    // Alimenta o campo de depreciação usado no cálculo do valor final
+    const campoDep = document.querySelector('#formResultado [name="depreciacao"]');
+    if (campoDep) campoDep.value = d.depreciacaoAplicavelPct;
+
+    box.innerHTML = `
+      <div class="stat-grid" style="margin-top:14px;">
+        <div class="stat"><div class="n">${d.idadePercentual}%</div><div class="l">Idade / vida útil (${d.idade} de ${d.vidaUtilReferencial} anos)</div></div>
+        <div class="stat"><div class="n">${d.classeHeidecke}</div><div class="l">${d.descricaoConservacao}</div></div>
+        <div class="stat"><div class="n">${d.kdPct}%</div><div class="l">Coeficiente Kd (bruto)</div></div>
+        <div class="stat"><div class="n">${d.depreciacaoAplicavelPct}%</div><div class="l">Depreciação aplicável (resíduo ${d.residuoPct}%)</div></div>
+      </div>
+      <p style="font-size:11.5px;color:var(--slate-500);margin-top:10px;line-height:1.5;">
+        Idade ${d.tipoIdadeUsada} · estrutura ${d.estrutura}
+        ${d.classeSugeridaAutomaticamente ? ' · classe Heidecke sugerida automaticamente pela conservação informada' : ' · classe Heidecke definida manualmente'}<br>
+        <span style="color:var(--amber);">⚠ ${d.avisoTerreno}</span>
+        ${d.aviso ? `<br><span style="color:var(--amber);">⚠ ${d.aviso}</span>` : ''}
+      </p>
+      <p style="font-size:12px;color:var(--green);margin-top:8px;">✓ Campo "Depreciação (%)" abaixo preenchido com ${d.depreciacaoAplicavelPct}%.</p>`;
+  } catch (err) {
+    box.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
+  } finally { definirCarregando(btn, false); }
 }
 
 async function carregarFipeZap() {
@@ -1388,6 +1469,198 @@ async function renderResumo(main) {
   } catch (err) {
     box.innerHTML = `<div class="empty">⚠ ${err.message}</div>`;
   }
+}
+
+/* ---- Inferência estatística (regressão linear múltipla) ---- */
+async function renderInferencia(main) {
+  main.innerHTML = `
+    <div class="page-title"><h2>Inferência Estatística</h2><p>Regressão linear múltipla conforme NBR 14653-2 — método de maior rigor que o tratamento por fatores.</p></div>
+    <div class="card">
+      <h3>Modelo</h3>
+      <p style="font-size:12px;color:var(--slate-500);margin-bottom:12px;">Selecione as variáveis explicativas. Quanto mais variáveis, mais dados a norma exige: Grau III precisa de 6×(k+1) amostras.</p>
+      <div id="listaVariaveis" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));"></div>
+      <div style="margin-top:14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate-900);font-weight:500;cursor:pointer;">
+          <input type="checkbox" id="incluirHistorico" style="width:auto;min-height:0;">
+          Incluir amostras do Banco de Mercado Histórico (mesma cidade e tipo)
+        </label>
+      </div>
+      <div class="row-actions"><button class="primary" onclick="executarInferencia(this)">Rodar regressão</button></div>
+    </div>
+    <div id="resultadoInferencia"></div>
+  `;
+  try {
+    const vars = await apiGet('variaveisInferencia');
+    const padrao = ['Area_m2', 'Dormitorios', 'Vagas', 'Conservacao_1_10', 'Classificacao_Bairro'];
+    document.getElementById('listaVariaveis').innerHTML = vars.map(v => `
+      <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:400;color:var(--slate-900);cursor:pointer;">
+        <input type="checkbox" class="varInferencia" value="${v.nome}" ${padrao.includes(v.nome) ? 'checked' : ''} style="width:auto;min-height:0;">
+        ${v.rotulo}
+      </label>`).join('');
+  } catch (err) {
+    document.getElementById('listaVariaveis').innerHTML = `<p style="font-size:12px;color:var(--red);">⚠ ${err.message}</p>`;
+  }
+}
+
+async function executarInferencia(btn) {
+  const selecionadas = Array.from(document.querySelectorAll('.varInferencia:checked')).map(c => c.value);
+  if (!selecionadas.length) { toast('Selecione ao menos uma variável.', true); return; }
+
+  definirCarregando(btn, true, 'Calculando…');
+  const box = document.getElementById('resultadoInferencia');
+  try {
+    const r = await apiGet('rodarInferencia', {
+      idProcesso: state.processoAtual,
+      variaveis: selecionadas.join(','),
+      incluirHistorico: document.getElementById('incluirHistorico').checked ? 'true' : 'false'
+    });
+
+    const corGrau = r.grauFundamentacao.includes('III') ? 'var(--green)'
+                  : r.grauFundamentacao.includes('Não') ? 'var(--red)' : 'var(--amber)';
+
+    box.innerHTML = `
+      <div class="card">
+        <h3>Qualidade do modelo</h3>
+        <div class="stat-grid">
+          <div class="stat"><div class="n">${r.n}</div><div class="l">Amostras usadas${r.descartadas ? ` (${r.descartadas} descartadas)` : ''}</div></div>
+          <div class="stat"><div class="n">${(r.R2 * 100).toFixed(1)}%</div><div class="l">R² — poder explicativo</div></div>
+          <div class="stat"><div class="n">${(r.R2ajustado * 100).toFixed(1)}%</div><div class="l">R² ajustado</div></div>
+          <div class="stat"><div class="n" style="color:${corGrau};font-size:16px;">${r.grauFundamentacao}</div><div class="l">Enquadramento NBR</div></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--slate-500);margin-top:12px;line-height:1.6;">
+          F = ${r.F} (significância ${r.significanciaFPct}%) · ${r.k} variável(is) · mínimos exigidos: Grau I ${r.minimos.grauI}, Grau II ${r.minimos.grauII}, Grau III ${r.minimos.grauIII} amostras
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Coeficientes</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Variável</th><th>Coeficiente</th><th>Erro padrão</th><th>t</th><th>Signif.</th></tr></thead>
+          <tbody>
+            ${r.coeficientes.map(c => `
+              <tr>
+                <td>${c.rotulo}</td>
+                <td>${c.coeficiente.toLocaleString('pt-BR')}</td>
+                <td>${c.erroPadrao.toLocaleString('pt-BR')}</td>
+                <td>${c.t}</td>
+                <td style="color:${c.significanciaPct <= 10 ? 'var(--green)' : c.significanciaPct <= 30 ? 'var(--amber)' : 'var(--red)'};">${c.significanciaPct}%</td>
+              </tr>`).join('')}
+            <tr><td colspan="5" style="font-size:11.5px;color:var(--slate-500);padding-top:10px;">
+              Intercepto: ${r.intercepto.toLocaleString('pt-BR')} · Significância menor = variável mais confiável. A norma exige ≤10% (Grau III), ≤20% (II), ≤30% (I).
+            </td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      ${r.valorUnitEstimado !== null ? `
+        <div class="card" style="background:var(--blue-50);">
+          <h3>Valor estimado para o avaliando</h3>
+          <div class="stat-grid">
+            <div class="stat"><div class="n">R$ ${r.valorUnitEstimado.toLocaleString('pt-BR')}</div><div class="l">Valor unitário R$/m²</div></div>
+            <div class="stat"><div class="n">R$ ${r.intervaloConfianca95.inferior.toLocaleString('pt-BR')}</div><div class="l">Limite inferior (95%)</div></div>
+            <div class="stat"><div class="n">R$ ${r.intervaloConfianca95.superior.toLocaleString('pt-BR')}</div><div class="l">Limite superior (95%)</div></div>
+          </div>
+        </div>`
+      : `<div class="card"><p style="font-size:12.5px;color:var(--amber);">⚠ Não foi possível estimar o valor: faltam dados do avaliando na vistoria (${r.camposFaltantesAvaliando.join(', ')}).</p></div>`}
+    `;
+  } catch (err) {
+    box.innerHTML = `<div class="card"><p style="font-size:13px;color:var(--red);">⚠ ${err.message}</p></div>`;
+  } finally { definirCarregando(btn, false); }
+}
+
+/* =========================================================
+   Importação de amostras em lote (colar de planilha)
+   ========================================================= */
+const COLUNAS_IMPORTACAO = [
+  'Fonte_Anuncio', 'Endereco', 'Bairro', 'Tipo', 'Area_m2', 'Padrao_Construtivo',
+  'Conservacao_1_10', 'Andar', 'Vagas', 'Dormitorios', 'Classificacao_Bairro',
+  'Data_Pesquisa', 'Tipo_Dado', 'Valor_Anunciado_R$'
+];
+
+let linhasImportacao = [];
+
+/** Converte números em formato brasileiro (1.234,56) para número real. */
+function numeroBR_(txt) {
+  if (txt === undefined || txt === null) return '';
+  const limpo = String(txt).trim().replace(/[R$\s]/g, '');
+  if (!limpo) return '';
+  // Se tem vírgula, assume padrão BR: ponto é milhar, vírgula é decimal
+  const normalizado = limpo.includes(',')
+    ? limpo.replace(/\./g, '').replace(',', '.')
+    : limpo;
+  const n = Number(normalizado);
+  return isNaN(n) ? '' : n;
+}
+
+function previewImportacao() {
+  const texto = document.getElementById('colarAmostras').value.trim();
+  const box = document.getElementById('previewImportacao');
+  const btn = document.getElementById('btnImportar');
+  if (!texto) { toast('Cole as linhas primeiro.', true); return; }
+
+  const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+  linhasImportacao = [];
+  const problemas = [];
+
+  linhas.forEach((linha, i) => {
+    // Aceita tabulação (colado do Excel) ou ponto-e-vírgula (CSV brasileiro)
+    const partes = linha.includes('\t') ? linha.split('\t') : linha.split(';');
+    const obj = {};
+    COLUNAS_IMPORTACAO.forEach((col, idx) => {
+      const bruto = (partes[idx] || '').trim();
+      obj[col] = ['Area_m2', 'Valor_Anunciado_R$', 'Conservacao_1_10', 'Andar', 'Vagas', 'Dormitorios'].includes(col)
+        ? numeroBR_(bruto) : bruto;
+    });
+
+    if (!obj.Area_m2) problemas.push(`Linha ${i + 1}: área inválida ou vazia`);
+    if (!obj['Valor_Anunciado_R$']) problemas.push(`Linha ${i + 1}: valor inválido ou vazio`);
+    linhasImportacao.push(obj);
+  });
+
+  const validas = linhasImportacao.filter(o => o.Area_m2 && o['Valor_Anunciado_R$']);
+
+  box.innerHTML = `
+    ${problemas.length ? `<p style="font-size:12px;color:var(--red);margin-top:12px;">⚠ ${problemas.length} problema(s):<br>${problemas.slice(0, 5).join('<br>')}${problemas.length > 5 ? `<br>…e mais ${problemas.length - 5}` : ''}</p>` : ''}
+    <p style="font-size:12.5px;color:var(--slate-500);margin-top:12px;">${validas.length} de ${linhas.length} linha(s) prontas para importar.</p>
+    ${validas.length ? `
+      <div class="table-wrap" style="margin-top:8px;"><table>
+        <thead><tr><th>Bairro</th><th>Tipo</th><th>Área</th><th>Dorm.</th><th>Valor</th><th>R$/m²</th></tr></thead>
+        <tbody>${validas.slice(0, 8).map(o => `
+          <tr><td>${o.Bairro || '—'}</td><td>${o.Tipo || '—'}</td><td>${o.Area_m2} m²</td>
+          <td>${o.Dormitorios || '—'}</td>
+          <td>R$ ${Number(o['Valor_Anunciado_R$']).toLocaleString('pt-BR')}</td>
+          <td>R$ ${Math.round(o['Valor_Anunciado_R$'] / o.Area_m2).toLocaleString('pt-BR')}</td></tr>`).join('')}
+        </tbody>
+      </table></div>
+      ${validas.length > 8 ? `<p style="font-size:11.5px;color:var(--slate-500);margin-top:6px;">Mostrando as 8 primeiras de ${validas.length}.</p>` : ''}
+    ` : ''}`;
+
+  linhasImportacao = validas;
+  btn.style.display = validas.length ? 'inline-flex' : 'none';
+}
+
+async function confirmarImportacao(btn) {
+  if (!linhasImportacao.length) return;
+  definirCarregando(btn, true, 'Importando…');
+  try {
+    const vistoria = await apiGet('getVistoria', { idProcesso: state.processoAtual }).catch(() => null);
+    const cidade = vistoria ? vistoria.Cidade_UF : '';
+
+    const r = await apiPost('importarAmostrasLote', {
+      ID_Processo_FK: state.processoAtual,
+      linhas: linhasImportacao.map(o => ({ ...o, Cidade_UF: cidade }))
+    });
+
+    toast(`${r.importadas} amostras importadas (${r.enviadasAoHistorico} no banco histórico).`);
+    document.getElementById('colarAmostras').value = '';
+    document.getElementById('previewImportacao').innerHTML = '';
+    btn.style.display = 'none';
+    linhasImportacao = [];
+    state.progresso.amostras = true;
+    atualizarEstadoAbas();
+    await carregarAmostras();
+  } catch (err) { toast(err.message, true); }
+  finally { definirCarregando(btn, false); }
 }
 
 /* =========================================================
